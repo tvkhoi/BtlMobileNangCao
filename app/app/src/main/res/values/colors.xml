@@ -9,4 +9,10 @@
     <color name="startcolor">#ED8770</color>
     <color name="endcolor">#d9519d</color>
     <color name="primary">#181b2c</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="light_blue_A200">#FF40C4FF</color>
+    <color name="light_blue_600">#FF039BE5</color>
 </resources>
