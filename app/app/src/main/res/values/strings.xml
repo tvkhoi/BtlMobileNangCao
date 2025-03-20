@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">EchoMusic</string>
+
+    <string name="t_n_ng_nh_p">Tên đăng nhập</string>
+    <string name="ng_nh_p">Đăng nhập</string>
+    <string name="b_n_c_t_i_kho_n">Bạn đã có tài khoản?</string>
+    <string name="nh_p_l_i_m_t_kh_u">Nhập lại mật khẩu</string>
+    <string name="m_t_kh_u">Mật khẩu</string>
+    <string name="email_id">Email id</string>
 </resources>
