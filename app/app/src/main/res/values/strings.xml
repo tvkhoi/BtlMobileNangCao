@@ -13,8 +13,12 @@
     <string name="title_2">Đã nghe gần đây</string>
     <string name="title_2.1">Xem thêm</string>
 
+    <string name="title_image_featuring_1">V-pop mới</string>
+
     <string name="title_activity_libraries">Thư viện của bạn</string>
     <string name="title_menu_item1">Trang chủ</string>
     <string name="title_menu_item2">Tìm kiếm</string>
     <string name="title_menu_item3">Thư viện</string>
+
+    <string name="bar_foryou">Dành cho bạn</string>
 </resources>

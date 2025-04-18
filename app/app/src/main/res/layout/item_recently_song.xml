@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/itemRecentlySong"
+    android:layout_width="wrap_content"
+    android:layout_height="110dp"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"
+    android:paddingRight="16dp">
+
+        <androidx.cardview.widget.CardView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="8dp"
+            >
+            <ImageView
+                android:id="@+id/imgSong"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:src="@drawable/song"
+                android:scaleType="fitXY"/>
+            <View
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                style="@style/margin_button_play"
+                android:background="@drawable/play_arrow"/>
+        </androidx.cardview.widget.CardView>
+        <TextView
+            android:id="@+id/nameSong"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="20 25 30"
+            style="@style/song"/>
+</LinearLayout>

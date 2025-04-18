@@ -17,4 +17,8 @@
     <color name="light_blue_600">#FF039BE5</color>
     <color name="color_text">#BFFFFFFF</color>
     <color name="color_opacity_50">#80000000</color>
+    <color name="rounded_background">#1FFFFFFF</color>
+    <color name="light_blue_900">#FF01579B</color>
+    <color name="light_blue_A400">#FF00B0FF</color>
+    <color name="purple_200">#FFBB86FC</color>
 </resources>

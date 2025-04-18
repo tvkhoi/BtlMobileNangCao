@@ -22,4 +22,30 @@
         <item name="android:textSize">14sp</item>
         <item name="android:textColor">@color/color_text</item>
     </style>
+
+    <style name="text_seemore">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">#FFFFFFFF</item>
+        <item name="android:layout_marginTop">32dp</item>
+        <item name="android:layout_marginRight">24dp</item>
+    </style>
+
+    <style name="margin">
+        <item name="android:layout_marginLeft">24dp</item>
+        <item name="android:layout_marginTop">16dp</item>
+    </style>
+
+    <style name="margin_button_play">
+        <item name="android:layout_marginTop">48dp</item>
+        <item name="android:layout_marginRight">48dp</item>
+        <item name="android:layout_marginLeft">8dp</item>
+        <item name="android:layout_marginBottom">8dp</item>
+    </style>
+
+    <style name="song">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/color_text</item>
+        <item name="android:layout_marginTop">8dp</item>
+
+    </style>
 </resources>
