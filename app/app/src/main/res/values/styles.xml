@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="title_text">
+        <item name="android:textSize">20sp</item>
+        <item name="android:textColor">@color/color_text</item>
+        <item name="android:layout_marginLeft">24dp</item>
+        <item name="android:layout_marginTop">24dp</item>
+    </style>
+
+    <style name="margin_recy">
+        <item name="android:layout_marginTop">32dp</item>
+        <item name="android:layout_marginRight">24dp</item>
+        <item name="android:layout_marginLeft">24dp</item>
+    </style>
+
+    <style name="hi_username">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">@color/color_text</item>
+    </style>
+
+    <style name="textTabLayout">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/color_text</item>
+    </style>
+</resources>

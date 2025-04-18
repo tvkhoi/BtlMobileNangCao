@@ -15,4 +15,6 @@
     <color name="teal_700">#FF018786</color>
     <color name="light_blue_A200">#FF40C4FF</color>
     <color name="light_blue_600">#FF039BE5</color>
+    <color name="color_text">#BFFFFFFF</color>
+    <color name="color_opacity_50">#80000000</color>
 </resources>
