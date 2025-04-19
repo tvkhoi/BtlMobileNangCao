@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="8dp"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <ImageView
+        android:id="@+id/miniImage"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:scaleType="centerCrop"
+        android:src="@drawable/song"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/miniNameSong"
+        android:layout_width="180dp"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="8dp"
+        android:layout_marginTop="3dp"
+        android:text="20 25 30"
+        android:textColor="@color/white"
+        android:textSize="16sp"
+        app:layout_constraintLeft_toRightOf="@id/miniImage"
+        app:layout_constraintTop_toTopOf="@id/miniImage" />
+
+    <TextView
+        android:id="@+id/miniArtist"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="8dp"
+        android:layout_marginBottom="3dp"
+        android:text="Bao Anh"
+        android:textColor="@color/color_text_artist"
+        app:layout_constraintBottom_toBottomOf="@id/miniImage"
+        app:layout_constraintLeft_toRightOf="@id/miniImage" />
+
+    <ImageView
+        android:id="@+id/minibuttonPreSong"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:src="@drawable/forward_icon"
+        app:layout_constraintEnd_toStartOf="@+id/miniplaySong_icon"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toEndOf="@+id/miniNameSong"
+        app:layout_constraintTop_toTopOf="@id/miniImage"
+        app:layout_constraintBottom_toBottomOf="@id/miniImage"/>
+
+    <ImageView
+        android:id="@+id/miniplaySong_icon"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:background="@drawable/play_arrow"
+        app:layout_constraintEnd_toStartOf="@+id/miniplayNextSong"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toEndOf="@+id/minibuttonPreSong"
+        app:layout_constraintTop_toTopOf="@id/miniImage"
+        app:layout_constraintBottom_toBottomOf="@id/miniImage"
+        />
+
+    <ImageView
+        android:id="@+id/miniplayNextSong"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:scaleX="-1"
+        android:src="@drawable/forward_icon"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toEndOf="@+id/miniplaySong_icon"
+        app:layout_constraintTop_toTopOf="@id/miniImage"
+        app:layout_constraintBottom_toBottomOf="@id/miniImage"
+        android:layout_marginRight="10dp"/>
+</androidx.constraintlayout.widget.ConstraintLayout>

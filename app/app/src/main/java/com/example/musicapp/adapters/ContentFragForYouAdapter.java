@@ -13,6 +13,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.musicapp.IMyOnClickListener;
 import com.example.musicapp.R;
+import com.example.musicapp.activities.PlaySongActivity;
 import com.example.musicapp.models.Frame;
 import com.example.musicapp.models.Song;
 
@@ -67,7 +68,10 @@ public class ContentFragForYouAdapter
 
     @Override
     public void myClickToSendArrayList(int position, ArrayList<Song> songList) {
-
+        Intent intent = new Intent(context, PlaySongActivity.class);
+        intent.putExtra("position",position);
+        intent.putExtra("songList",songList);
+        context.startActivity(intent);
     }
 
     public class ContentViewHolder extends RecyclerView.ViewHolder{

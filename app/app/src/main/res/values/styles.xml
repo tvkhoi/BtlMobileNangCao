@@ -46,6 +46,27 @@
         <item name="android:textSize">12sp</item>
         <item name="android:textColor">@color/color_text</item>
         <item name="android:layout_marginTop">8dp</item>
+    </style>
 
+    <style name="good_evening">
+        <item name="android:textSize">20sp</item>
+        <item name="android:textColor">@color/color_text</item>
+    </style>
+
+    <style name="duration_song">
+        <item name="android:textColor">@color/color_text_artist</item>
+        <item name="android:textSize">12sp</item>
+    </style>
+
+    <style name="text_song">
+        <item name="android:textSize">12sp</item>
+        <item name="android:layout_marginLeft">8dp</item>
+    </style>
+
+    <style name="padding">
+        <item name="android:paddingLeft">24dp</item>
+        <item name="android:paddingRight">24dp</item>
+        <item name="android:paddingTop">8dp</item>
+        <item name="android:paddingBottom">8dp</item>
     </style>
 </resources>

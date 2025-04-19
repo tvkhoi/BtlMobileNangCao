@@ -108,7 +108,7 @@ public class FrameAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>{
         }
     }
     // viewholder cho item tiêu biểu hôm nay
-    public class FrameViewHolder3 extends RecyclerView.ViewHolder implements View.OnClickListener {
+    public class FrameViewHolder3 extends RecyclerView.ViewHolder {
         ImageView imgSong;
         TextView tvSong;
 
@@ -116,14 +116,6 @@ public class FrameAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>{
             super(itemView);
             imgSong = itemView.findViewById(R.id.imgFeaturing);
             tvSong = itemView.findViewById(R.id.tvNameFeaturing);
-            itemView.setOnClickListener(this);
-        }
-
-        @Override
-        public void onClick(View view) {
-            if (myOnClick != null) {
-                myOnClick.myClickToSendArrayList(getAdapterPosition(), listSong);
-            }
         }
     }
 
