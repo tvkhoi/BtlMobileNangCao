@@ -319,11 +319,12 @@ public class PlaySongActivity extends AppCompatActivity {
         storage.storeSongIndex(songIndex);
 
         Intent intent = new Intent(this, MediaPlayerService.class);
+        Intent broadcastIntent = new Intent(PLAY_NEW_SONG_ACTION);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(broadcastIntent);
+
         if (!serviceBound) {
             startService(intent);
             bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
-        } else {
-            sendBroadcast(new Intent(PLAY_NEW_SONG_ACTION));
         }
     }
 
@@ -333,12 +334,14 @@ public class PlaySongActivity extends AppCompatActivity {
         outState.putBoolean("ServiceState", serviceBound);
         outState.putBoolean("RepeatState", isRepeatEnabled);
         outState.putBoolean("ShuffleState", isShuffleEnabled);
+        outState.putBoolean("PlayingState", isPlaying);
     }
 
     @Override
     protected void onRestoreInstanceState(Bundle savedInstanceState) {
         super.onRestoreInstanceState(savedInstanceState);
         serviceBound = savedInstanceState.getBoolean("ServiceState");
+        isPlaying = savedInstanceState.getBoolean("PlayingState");
         isRepeatEnabled = savedInstanceState.getBoolean("RepeatState");
         imgRepeat.setImageResource(isRepeatEnabled ? R.drawable.icon_repeat_50_on : R.drawable.repeat_icon);
         isShuffleEnabled = savedInstanceState.getBoolean("ShuffleState");

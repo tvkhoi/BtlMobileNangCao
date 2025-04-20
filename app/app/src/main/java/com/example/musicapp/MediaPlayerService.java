@@ -40,6 +40,7 @@ public class MediaPlayerService extends Service implements
     private Song currentSong;
     private boolean isRepeatEnabled = false;
     private boolean isShuffleEnabled = false;
+    private boolean isMediaPreparing = false;
     private final Handler handler = new Handler();
     private final Random random = new Random();
     private static final String TAG = "MediaPlayerService";
@@ -87,9 +88,8 @@ public class MediaPlayerService extends Service implements
             return START_NOT_STICKY;
         }
 
-        if (mediaPlayer == null) {
-            initMediaPlayer();
-        }
+        resetMediaPlayer();
+        initMediaPlayer();
 
         // Gửi trạng thái lặp lại ban đầu
         Intent repeatIntent = new Intent(REPEAT_STATUS);
@@ -104,6 +104,25 @@ public class MediaPlayerService extends Service implements
 
         handler.post(updateSeekbarRunnable);
         return START_STICKY;
+    }
+
+    private void resetMediaPlayer() {
+        if (mediaPlayer != null) {
+            try {
+                if (mediaPlayer.isPlaying()) {
+                    mediaPlayer.stop();
+                }
+                mediaPlayer.reset();
+                mediaPlayer.release();
+            } catch (IllegalStateException e) {
+                Log.e(TAG, "IllegalStateException in resetMediaPlayer: " + e.getMessage());
+            }
+            mediaPlayer = null;
+        }
+        resumePosition = 0;
+        currentPosition = 0;
+        isMediaPreparing = false;
+        // Giữ nguyên isRepeatEnabled và isShuffleEnabled
     }
 
     private void initMediaPlayer() {
@@ -127,6 +146,7 @@ public class MediaPlayerService extends Service implements
         mediaPlayer.reset();
         try {
             mediaPlayer.setDataSource(currentSong.getSongFileUrl());
+            isMediaPreparing = true;
             mediaPlayer.prepareAsync();
         } catch (IOException e) {
             Log.e(TAG, "Error setting data source: " + e.getMessage());
@@ -136,7 +156,7 @@ public class MediaPlayerService extends Service implements
     }
 
     public void seekTo(int position) {
-        if (mediaPlayer != null) {
+        if (mediaPlayer != null && !isMediaPreparing) {
             mediaPlayer.seekTo(position);
         }
     }
@@ -150,14 +170,14 @@ public class MediaPlayerService extends Service implements
     }
 
     private void pauseMedia() {
-        if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+        if (mediaPlayer != null && mediaPlayer.isPlaying() && !isMediaPreparing) {
             mediaPlayer.pause();
             resumePosition = mediaPlayer.getCurrentPosition();
         }
     }
 
     private void playPauseMedia() {
-        if (mediaPlayer == null) return;
+        if (mediaPlayer == null || isMediaPreparing) return;
         if (mediaPlayer.isPlaying()) {
             pauseMedia();
         } else {
@@ -303,11 +323,14 @@ public class MediaPlayerService extends Service implements
                     songIndex = new StorageSong(context).loadSongIndex();
                     if (songIndex >= 0 && songIndex < songList.size()) {
                         currentSong = songList.get(songIndex);
+                        resumePosition = 0;
                         stopMedia();
                         if (mediaPlayer != null) {
                             mediaPlayer.reset();
+                            mediaPlayer = null;
                         }
                         initMediaPlayer();
+                        sendMiniPlayerBroadcast();
                     } else {
                         broadcastError("Invalid song index");
                         stopSelf();
@@ -425,6 +448,7 @@ public class MediaPlayerService extends Service implements
 
     @Override
     public void onPrepared(MediaPlayer mp) {
+        isMediaPreparing = false;
         playMedia();
     }
 
