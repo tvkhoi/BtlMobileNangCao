@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    tools:context=".fragments.MiniPlayerFragment">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/miniPlayerContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/black"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        app:layout_constraintBottom_toTopOf="@id/bottomBar">
+
+        <ImageView
+            android:id="@+id/miniImage_frag"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:scaleType="centerCrop"
+            android:src="@drawable/song"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <TextView
+            android:id="@+id/miniNameSong_frag"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Song Title"
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            app:layout_constraintEnd_toStartOf="@id/minibuttonPreSong_frag"
+            app:layout_constraintStart_toEndOf="@id/miniImage_frag"
+            app:layout_constraintTop_toTopOf="@id/miniImage_frag" />
+
+        <TextView
+            android:id="@+id/miniArtist_frag"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Artist"
+            android:textColor="@color/color_text_artist"
+            android:textSize="14sp"
+            app:layout_constraintBottom_toBottomOf="@id/miniImage_frag"
+            app:layout_constraintEnd_toStartOf="@id/minibuttonPreSong_frag"
+            app:layout_constraintStart_toEndOf="@id/miniImage_frag" />
+
+        <ImageView
+            android:id="@+id/minibuttonPreSong_frag"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:contentDescription="Previous Song"
+            android:src="@drawable/forward_icon"
+            app:layout_constraintBottom_toBottomOf="@id/miniImage_frag"
+            app:layout_constraintEnd_toStartOf="@id/miniplaySong_icon_frag"
+            app:layout_constraintHorizontal_bias="0.5"
+            app:layout_constraintTop_toTopOf="@id/miniImage_frag" />
+
+        <ImageView
+            android:id="@+id/miniplaySong_icon_frag"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:contentDescription="Play/Pause"
+            android:src="@drawable/play_arrow"
+            app:layout_constraintBottom_toBottomOf="@id/miniImage_frag"
+            app:layout_constraintEnd_toStartOf="@id/miniplayNextSong_frag"
+            app:layout_constraintHorizontal_bias="0.5"
+            app:layout_constraintTop_toTopOf="@id/miniImage_frag" />
+
+        <ImageView
+            android:id="@+id/miniplayNextSong_frag"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:contentDescription="Next Song"
+            android:src="@drawable/forward_icon"
+            android:scaleX="-1"
+            app:layout_constraintBottom_toBottomOf="@id/miniImage_frag"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.5"
+            app:layout_constraintTop_toTopOf="@id/miniImage_frag" />
+
+        <SeekBar
+            android:id="@+id/miniPlayerSeekBar_frag"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:progressBackgroundTint="@color/color_text_artist"
+            android:thumbTint="@color/white"
+            app:layout_constraintTop_toBottomOf="@id/miniImage_frag" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</FrameLayout>

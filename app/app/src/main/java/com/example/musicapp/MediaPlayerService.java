@@ -8,31 +8,26 @@ import android.content.IntentFilter;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
-
-import androidx.annotation.Nullable;
+import androidx.core.app.NotificationCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
-
 import com.example.musicapp.activities.PlaySongActivity;
 import com.example.musicapp.models.Song;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Random;
 
 public class MediaPlayerService extends Service implements
         MediaPlayer.OnCompletionListener, MediaPlayer.OnPreparedListener,
-        MediaPlayer.OnErrorListener, MediaPlayer.OnSeekCompleteListener,
-        MediaPlayer.OnInfoListener, MediaPlayer.OnBufferingUpdateListener,
-        AudioManager.OnAudioFocusChangeListener {
+        MediaPlayer.OnErrorListener, AudioManager.OnAudioFocusChangeListener {
 
     private final IBinder binder = new LocalBinder();
     private MediaPlayer mediaPlayer;
-    private int resumePosition;
-    private int currentPosition;
     private AudioManager audioManager;
     private AudioFocusRequest audioFocusRequest;
     private ArrayList<Song> songList;
@@ -40,278 +35,315 @@ public class MediaPlayerService extends Service implements
     private Song currentSong;
     private boolean isRepeatEnabled = false;
     private boolean isShuffleEnabled = false;
-    private boolean isMediaPreparing = false;
+    private boolean isPreparing = false;
+    private int pendingSeekPosition = -1;
     private final Handler handler = new Handler();
     private final Random random = new Random();
     private static final String TAG = "MediaPlayerService";
 
-    public static final String ACTION_SEEK_TO = "com.example.appmusic.ACTION_SEEK_TO";
-    public static final String SONG_COMPLETED = "com.example.appmusic.SONG_COMPLETED";
     public static final String ACTION_PLAY_PAUSE = "ACTION_PLAY_PAUSE";
-    public static final String ACTION_PREVIOUS = "ACTION_PREVIOUS";
     public static final String ACTION_NEXT = "ACTION_NEXT";
-    public static final String ACTION_STOP = "ACTION_STOP";
+    public static final String ACTION_PREVIOUS = "ACTION_PREVIOUS";
+    public static final String ACTION_SEEK_TO = "ACTION_SEEK_TO";
     public static final String ACTION_TOGGLE_REPEAT = "ACTION_TOGGLE_REPEAT";
     public static final String ACTION_TOGGLE_SHUFFLE = "ACTION_TOGGLE_SHUFFLE";
     public static final String UPDATE_SEEKBAR = "UPDATE_SEEKBAR";
-    public static final String ERROR_ACTION = "com.example.appmusic.ERROR";
-    public static final String REPEAT_STATUS = "com.example.appmusic.REPEAT_STATUS";
-    public static final String SHUFFLE_STATUS = "com.example.appmusic.SHUFFLE_STATUS";
+    public static final String SONG_COMPLETED = "SONG_COMPLETED";
+    public static final String ERROR_ACTION = "ERROR_ACTION";
+    public static final String REPEAT_STATUS = "REPEAT_STATUS";
+    public static final String SHUFFLE_STATUS = "SHUFFLE_STATUS";
+    public static final String PLAYBACK_STARTED = "PLAYBACK_STARTED";
 
     @Override
     public void onCreate() {
         super.onCreate();
-        registerControlReceiver();
-        registerBecomingNoisyReceiver();
-        registerPlayNewSong();
+        registerReceivers();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        StorageSong storage = new StorageSong(getApplicationContext());
+        StorageSong storage = new StorageSong(this);
         songList = storage.loadSongArrayList();
         songIndex = storage.loadSongIndex();
 
-        if (songList == null || songList.isEmpty() || songIndex < 0 || songIndex >= songList.size()) {
-            Log.e(TAG, "Invalid song data: songList=" + (songList == null ? "null" : songList.size()) + ", songIndex=" + songIndex);
-            broadcastError("No songs available");
-            stopSelf();
-            return START_NOT_STICKY;
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "music_channel")
+                .setContentTitle("Music Player")
+                .setContentText("Waiting for song")
+                .setSmallIcon(R.drawable.ic_apple_music_icon);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            android.app.NotificationChannel channel = new android.app.NotificationChannel(
+                    "music_channel", "Music Player", android.app.NotificationManager.IMPORTANCE_LOW);
+            android.app.NotificationManager manager = getSystemService(android.app.NotificationManager.class);
+            manager.createNotificationChannel(channel);
         }
+        startForeground(1, builder.build());
 
-        currentSong = songList.get(songIndex);
-        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         if (!requestAudioFocus()) {
-            Log.e(TAG, "Failed to request audio focus");
-            broadcastError("Cannot play audio at this time");
-            stopSelf();
-            return START_NOT_STICKY;
+            broadcastError("Cannot request audio focus");
+            return START_STICKY;
         }
 
-        resetMediaPlayer();
-        initMediaPlayer();
+        if (songList != null && !songList.isEmpty() && songIndex >= 0 && songIndex < songList.size()) {
+            currentSong = songList.get(songIndex);
+            initMediaPlayer();
+        } else {
+            broadcastError("Invalid song list or index");
+        }
 
-        // Gửi trạng thái lặp lại ban đầu
-        Intent repeatIntent = new Intent(REPEAT_STATUS);
-        repeatIntent.putExtra("isRepeatEnabled", isRepeatEnabled);
-        LocalBroadcastManager.getInstance(this).sendBroadcast(repeatIntent);
-        Log.d(TAG, "Initial repeat status sent: " + isRepeatEnabled);
-
-        Intent shuffleIntent = new Intent(SHUFFLE_STATUS);
-        shuffleIntent.putExtra("isShuffleEnabled", isShuffleEnabled);
-        LocalBroadcastManager.getInstance(this).sendBroadcast(shuffleIntent);
-        Log.d(TAG, "Initial shuffle status sent: " + isShuffleEnabled);
-
-        handler.post(updateSeekbarRunnable);
+        broadcastStatus();
+        handler.post(updateSeekBarRunnable);
         return START_STICKY;
-    }
-
-    private void resetMediaPlayer() {
-        if (mediaPlayer != null) {
-            try {
-                if (mediaPlayer.isPlaying()) {
-                    mediaPlayer.stop();
-                }
-                mediaPlayer.reset();
-                mediaPlayer.release();
-            } catch (IllegalStateException e) {
-                Log.e(TAG, "IllegalStateException in resetMediaPlayer: " + e.getMessage());
-            }
-            mediaPlayer = null;
-        }
-        resumePosition = 0;
-        currentPosition = 0;
-        isMediaPreparing = false;
-        // Giữ nguyên isRepeatEnabled và isShuffleEnabled
     }
 
     private void initMediaPlayer() {
         if (currentSong == null || currentSong.getSongFileUrl() == null) {
-            Log.e(TAG, "Invalid song or song URL");
             broadcastError("Invalid song data");
-            stopSelf();
+            return;
+        }
+        if (currentSong.getSongFileUrl().startsWith("http") && !isNetworkAvailable()) {
+            broadcastError("No network connection");
             return;
         }
         if (mediaPlayer != null) {
-            mediaPlayer.release();
+            try {
+                mediaPlayer.stop();
+                mediaPlayer.reset();
+                mediaPlayer.release();
+            } catch (Exception e) {
+                Log.e(TAG, "Error resetting MediaPlayer: " + e.getMessage());
+            }
+            mediaPlayer = null;
         }
         mediaPlayer = new MediaPlayer();
         mediaPlayer.setOnCompletionListener(this);
         mediaPlayer.setOnPreparedListener(this);
         mediaPlayer.setOnErrorListener(this);
-        mediaPlayer.setOnSeekCompleteListener(this);
-        mediaPlayer.setOnInfoListener(this);
-        mediaPlayer.setOnBufferingUpdateListener(this);
-
-        mediaPlayer.reset();
         try {
             mediaPlayer.setDataSource(currentSong.getSongFileUrl());
-            isMediaPreparing = true;
+            isPreparing = true;
             mediaPlayer.prepareAsync();
+            Log.d(TAG, "Preparing MediaPlayer for song: " + currentSong.getName());
         } catch (IOException e) {
-            Log.e(TAG, "Error setting data source: " + e.getMessage());
-            broadcastError("Failed to load song");
-            stopSelf();
+            Log.e(TAG, "Failed to load song: " + e.getMessage());
+            broadcastError("Failed to load song: " + e.getMessage());
         }
     }
 
-    public void seekTo(int position) {
-        if (mediaPlayer != null && !isMediaPreparing) {
-            mediaPlayer.seekTo(position);
-        }
+    private boolean isNetworkAvailable() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo networkInfo = cm.getActiveNetworkInfo();
+        return networkInfo != null && networkInfo.isConnectedOrConnecting();
     }
 
     private void playMedia() {
         if (mediaPlayer != null && !mediaPlayer.isPlaying()) {
             mediaPlayer.start();
-            handler.post(updateSeekbarRunnable);
-            sendMiniPlayerBroadcast();
+            updateNotification();
+            broadcastSongUpdate();
+            Intent intent = new Intent(PLAYBACK_STARTED);
+            LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+            Log.d(TAG, "Playing song: " + currentSong.getName());
         }
     }
 
     private void pauseMedia() {
-        if (mediaPlayer != null && mediaPlayer.isPlaying() && !isMediaPreparing) {
-            mediaPlayer.pause();
-            resumePosition = mediaPlayer.getCurrentPosition();
-        }
-    }
-
-    private void playPauseMedia() {
-        if (mediaPlayer == null || isMediaPreparing) return;
-        if (mediaPlayer.isPlaying()) {
-            pauseMedia();
-        } else {
-            if (resumePosition > 0) {
-                mediaPlayer.seekTo(resumePosition);
-            }
-            playMedia();
-        }
-    }
-
-    private void stopMedia() {
         if (mediaPlayer != null && mediaPlayer.isPlaying()) {
-            mediaPlayer.stop();
+            mediaPlayer.pause();
+            updateNotification();
+            Log.d(TAG, "Paused song: " + currentSong.getName());
         }
     }
 
     private void nextSong() {
         if (songList == null || songList.isEmpty()) {
-            Log.e(TAG, "Song list is empty or null");
             broadcastError("No songs available");
-            stopSelf();
             return;
         }
-        if (isShuffleEnabled) {
-            // Chọn bài ngẫu nhiên, tránh bài hiện tại
+        if (songIndex < 0 || songIndex >= songList.size()) {
+            songIndex = 0;
+        }
+        if (isShuffleEnabled && !isRepeatEnabled) {
             int newIndex;
             do {
                 newIndex = random.nextInt(songList.size());
             } while (newIndex == songIndex && songList.size() > 1);
             songIndex = newIndex;
         } else {
-            // Chuyển bài tuần tự
-            songIndex = (songIndex >= songList.size() - 1) ? 0 : songIndex + 1;
+            songIndex = (songIndex + 1) % songList.size();
         }
         currentSong = songList.get(songIndex);
-        new StorageSong(getApplicationContext()).storeSongIndex(songIndex);
-        stopMedia();
-        if (mediaPlayer != null) {
-            mediaPlayer.reset();
-        }
+        new StorageSong(this).storeSongIndex(songIndex);
+        Log.d(TAG, "Next song selected: " + currentSong.getName() + ", index: " + songIndex);
         initMediaPlayer();
+        broadcastSongUpdate();
     }
 
     private void previousSong() {
         if (songList == null || songList.isEmpty()) {
-            Log.e(TAG, "Song list is empty or null");
             broadcastError("No songs available");
-            stopSelf();
             return;
         }
-        if (isShuffleEnabled) {
-            // Chọn bài ngẫu nhiên, tránh bài hiện tại
+        if (songIndex < 0 || songIndex >= songList.size()) {
+            songIndex = 0;
+        }
+        if (isShuffleEnabled && !isRepeatEnabled) {
             int newIndex;
             do {
                 newIndex = random.nextInt(songList.size());
             } while (newIndex == songIndex && songList.size() > 1);
             songIndex = newIndex;
         } else {
-            // Chuyển bài tuần tự ngược
-            songIndex = (songIndex <= 0) ? songList.size() - 1 : songIndex - 1;
+            songIndex = (songIndex - 1 < 0) ? songList.size() - 1 : songIndex - 1;
         }
         currentSong = songList.get(songIndex);
-        new StorageSong(getApplicationContext()).storeSongIndex(songIndex);
-        stopMedia();
-        if (mediaPlayer != null) {
-            mediaPlayer.reset();
-        }
+        new StorageSong(this).storeSongIndex(songIndex);
+        Log.d(TAG, "Previous song selected: " + currentSong.getName() + ", index: " + songIndex);
         initMediaPlayer();
+        broadcastSongUpdate();
     }
 
     private void toggleRepeat() {
         isRepeatEnabled = !isRepeatEnabled;
-        Log.d(TAG, "Repeat mode toggled: " + (isRepeatEnabled ? "Enabled" : "Disabled"));
         Intent intent = new Intent(REPEAT_STATUS);
         intent.putExtra("isRepeatEnabled", isRepeatEnabled);
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+        Log.d(TAG, "Repeat toggled: " + isRepeatEnabled);
     }
 
     private void toggleShuffle() {
         isShuffleEnabled = !isShuffleEnabled;
-        Log.d(TAG, "Shuffle mode toggled: " + (isShuffleEnabled ? "Enabled" : "Disabled"));
         Intent intent = new Intent(SHUFFLE_STATUS);
         intent.putExtra("isShuffleEnabled", isShuffleEnabled);
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+        Log.d(TAG, "Shuffle toggled: " + isShuffleEnabled);
     }
 
-    private final Runnable updateSeekbarRunnable = new Runnable() {
+    private void updateNotification() {
+        String title = currentSong != null ? currentSong.getName() : "Unknown";
+        String text = currentSong != null ? currentSong.getArtist() : "Unknown";
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "music_channel")
+                .setContentTitle("Playing: " + title)
+                .setContentText(text)
+                .setSmallIcon(R.drawable.ic_apple_music_icon);
+        android.app.NotificationManager manager = (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        manager.notify(1, builder.build());
+    }
+
+    private final Runnable updateSeekBarRunnable = new Runnable() {
         @Override
         public void run() {
             if (mediaPlayer != null && mediaPlayer.isPlaying()) {
-                currentPosition = mediaPlayer.getCurrentPosition();
-                sendSeekbarUpdate();
+                int currentPos = mediaPlayer.getCurrentPosition();
+                Intent intent = new Intent(UPDATE_SEEKBAR);
+                intent.putExtra("currentPosition", currentPos);
+                LocalBroadcastManager.getInstance(MediaPlayerService.this).sendBroadcast(intent);
             }
             handler.postDelayed(this, 1000);
         }
     };
 
-    private void sendSeekbarUpdate() {
-        Intent intent = new Intent(UPDATE_SEEKBAR);
-        intent.putExtra("currentPosition", currentPosition);
-        sendBroadcast(intent);
-    }
-
-    private void sendMiniPlayerBroadcast() {
+    private void broadcastSongUpdate() {
         Intent intent = new Intent(PlaySongActivity.MINI_PLAYER);
         intent.putExtra("song", currentSong);
+        intent.putExtra("currentPosition", getCurrentPosition());
+        intent.putExtra("isPlaying", isPlaying());
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
-        Log.d(TAG, "MiniPlayer broadcast sent for song: " + (currentSong != null ? currentSong.getName() : "null"));
+        Log.d(TAG, "Broadcasting song update: " + (currentSong != null ? currentSong.getName() : "null") + ", position: " + getCurrentPosition() + ", isPlaying: " + isPlaying());
     }
 
     private void broadcastError(String message) {
         Intent intent = new Intent(ERROR_ACTION);
         intent.putExtra("errorMessage", message);
-        sendBroadcast(intent);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+        Log.e(TAG, "Error broadcast: " + message);
     }
 
-    private final BroadcastReceiver controlReceiver = new BroadcastReceiver() {
+    private void broadcastStatus() {
+        Intent repeatIntent = new Intent(REPEAT_STATUS);
+        repeatIntent.putExtra("isRepeatEnabled", isRepeatEnabled);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(repeatIntent);
+
+        Intent shuffleIntent = new Intent(SHUFFLE_STATUS);
+        shuffleIntent.putExtra("isShuffleEnabled", isShuffleEnabled);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(shuffleIntent);
+    }
+
+    private void registerReceivers() {
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(ACTION_PLAY_PAUSE);
+        filter.addAction(ACTION_NEXT);
+        filter.addAction(ACTION_PREVIOUS);
+        filter.addAction(ACTION_SEEK_TO);
+        filter.addAction(ACTION_TOGGLE_REPEAT);
+        filter.addAction(ACTION_TOGGLE_SHUFFLE);
+        filter.addAction(PlaySongActivity.PLAY_NEW_SONG_ACTION);
+        filter.addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+        LocalBroadcastManager.getInstance(this).registerReceiver(broadcastReceiver, filter);
+        registerReceiver(broadcastReceiver, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
+    }
+
+    private final BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
             if (action == null) return;
+            Log.d(TAG, "Received broadcast: " + action);
             switch (action) {
-                case ACTION_NEXT:
-                    nextSong();
+                case PlaySongActivity.PLAY_NEW_SONG_ACTION:
+                    StorageSong storage = new StorageSong(context);
+                    songIndex = storage.loadSongIndex();
+                    songList = storage.loadSongArrayList();
+                    if (songList == null || songList.isEmpty() || songIndex < 0 || songIndex >= songList.size()) {
+                        broadcastError("Invalid song data");
+                        Log.e(TAG, "PLAY_NEW_SONG_ACTION: Invalid song data");
+                        return;
+                    }
+                    Song newSong = songList.get(songIndex);
+                    String newSongUrl = newSong.getSongFileUrl() != null ? newSong.getSongFileUrl().trim().toLowerCase() : "";
+                    String currentSongUrl = currentSong != null && currentSong.getSongFileUrl() != null ? currentSong.getSongFileUrl().trim().toLowerCase() : "";
+                    int seekPosition = intent.getIntExtra("seekPosition", -1);
+
+                    if (!newSongUrl.isEmpty() && newSongUrl.equals(currentSongUrl) && !isPreparing && mediaPlayer != null) {
+                        Log.d(TAG, "PLAY_NEW_SONG_ACTION: Same song, updating UI only");
+                        if (seekPosition >= 0 && Math.abs(mediaPlayer.getCurrentPosition() - seekPosition) > 1000) {
+                            mediaPlayer.seekTo(seekPosition);
+                            Log.d(TAG, "PLAY_NEW_SONG_ACTION: Seeking to position " + seekPosition);
+                        }
+                        broadcastSongUpdate();
+                        updateNotification();
+                    } else {
+                        currentSong = newSong;
+                        pendingSeekPosition = seekPosition;
+                        initMediaPlayer();
+                        Log.d(TAG, "PLAY_NEW_SONG_ACTION: Different song, initializing MediaPlayer with seekPosition=" + seekPosition);
+                    }
                     break;
                 case ACTION_PLAY_PAUSE:
-                    playPauseMedia();
+                    if (mediaPlayer == null || isPreparing) {
+                        broadcastError("Player not ready");
+                        return;
+                    }
+                    if (mediaPlayer.isPlaying()) {
+                        pauseMedia();
+                    } else {
+                        playMedia();
+                    }
+                    break;
+                case ACTION_NEXT:
+                    nextSong();
                     break;
                 case ACTION_PREVIOUS:
                     previousSong();
                     break;
                 case ACTION_SEEK_TO:
-                    int seekPosition = intent.getIntExtra("seekPosition", 0);
-                    seekTo(seekPosition);
+                    int position = intent.getIntExtra("seekPosition", 0);
+                    if (mediaPlayer != null && !isPreparing) {
+                        mediaPlayer.seekTo(position);
+                        Log.d(TAG, "ACTION_SEEK_TO: Seek to position " + position);
+                    } else {
+                        pendingSeekPosition = position;
+                        Log.d(TAG, "ACTION_SEEK_TO: MediaPlayer not ready, storing seekPosition=" + position);
+                    }
                     break;
                 case ACTION_TOGGLE_REPEAT:
                     toggleRepeat();
@@ -319,88 +351,31 @@ public class MediaPlayerService extends Service implements
                 case ACTION_TOGGLE_SHUFFLE:
                     toggleShuffle();
                     break;
-                case PlaySongActivity.PLAY_NEW_SONG_ACTION:
-                    songIndex = new StorageSong(context).loadSongIndex();
-                    if (songIndex >= 0 && songIndex < songList.size()) {
-                        currentSong = songList.get(songIndex);
-                        resumePosition = 0;
-                        stopMedia();
-                        if (mediaPlayer != null) {
-                            mediaPlayer.reset();
-                            mediaPlayer = null;
-                        }
-                        initMediaPlayer();
-                        sendMiniPlayerBroadcast();
-                    } else {
-                        broadcastError("Invalid song index");
-                        stopSelf();
-                    }
+                case AudioManager.ACTION_AUDIO_BECOMING_NOISY:
+                    pauseMedia();
                     break;
             }
         }
     };
 
-    private void registerControlReceiver() {
-        IntentFilter filter = new IntentFilter();
-        filter.addAction(ACTION_NEXT);
-        filter.addAction(ACTION_PLAY_PAUSE);
-        filter.addAction(ACTION_PREVIOUS);
-        filter.addAction(ACTION_SEEK_TO);
-        filter.addAction(ACTION_TOGGLE_REPEAT);
-        filter.addAction(ACTION_TOGGLE_SHUFFLE);
-        filter.addAction(PlaySongActivity.PLAY_NEW_SONG_ACTION);
-        registerReceiver(controlReceiver, filter, Context.RECEIVER_EXPORTED);
-    }
-
-    private final BroadcastReceiver becomingNoisyReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            pauseMedia();
-        }
-    };
-
-    private void registerBecomingNoisyReceiver() {
-        IntentFilter filter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
-        registerReceiver(becomingNoisyReceiver, filter);
-    }
-
-    private final BroadcastReceiver playNewSongReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            songIndex = new StorageSong(context).loadSongIndex();
-            if (songIndex >= 0 && songIndex < songList.size()) {
-                currentSong = songList.get(songIndex);
-                stopMedia();
-                if (mediaPlayer != null) {
-                    mediaPlayer.reset();
-                }
-                initMediaPlayer();
-            } else {
-                broadcastError("Invalid song index");
-                stopSelf();
-            }
-        }
-    };
-
-    private void registerPlayNewSong() {
-        IntentFilter filter = new IntentFilter(PlaySongActivity.PLAY_NEW_SONG_ACTION);
-        registerReceiver(playNewSongReceiver, filter, Context.RECEIVER_EXPORTED);
+    private boolean requestAudioFocus() {
+        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        audioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setOnAudioFocusChangeListener(this)
+                .build();
+        return audioManager.requestAudioFocus(audioFocusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
     }
 
     @Override
-    public void onAudioFocusChange(int focusState) {
-        switch (focusState) {
+    public void onAudioFocusChange(int focusChange) {
+        switch (focusChange) {
             case AudioManager.AUDIOFOCUS_GAIN:
-                if (mediaPlayer == null) {
-                    initMediaPlayer();
-                } else if (!mediaPlayer.isPlaying()) {
+                if (mediaPlayer != null && !mediaPlayer.isPlaying()) {
                     playMedia();
                 }
-                mediaPlayer.setVolume(1.0f, 1.0f);
                 break;
             case AudioManager.AUDIOFOCUS_LOSS:
                 if (mediaPlayer != null) {
-                    stopMedia();
                     mediaPlayer.release();
                     mediaPlayer = null;
                 }
@@ -416,104 +391,86 @@ public class MediaPlayerService extends Service implements
         }
     }
 
-    private boolean requestAudioFocus() {
-        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        audioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                .setOnAudioFocusChangeListener(this)
-                .build();
-        return audioManager.requestAudioFocus(audioFocusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
-    }
-
-    private boolean removeAudioFocus() {
-        return audioManager != null && audioManager.abandonAudioFocusRequest(audioFocusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+    @Override
+    public void onPrepared(MediaPlayer mp) {
+        isPreparing = false;
+        if (pendingSeekPosition >= 0 && Math.abs(mediaPlayer.getCurrentPosition() - pendingSeekPosition) > 1000) {
+            mediaPlayer.seekTo(pendingSeekPosition);
+            Log.d(TAG, "MediaPlayer prepared, seeking to position: " + pendingSeekPosition);
+        }
+        pendingSeekPosition = -1;
+        playMedia();
+        Log.d(TAG, "MediaPlayer prepared, starting playback");
     }
 
     @Override
     public void onCompletion(MediaPlayer mp) {
-        Log.d(TAG, "Song completed, repeat mode: " + isRepeatEnabled);
         Intent intent = new Intent(SONG_COMPLETED);
-        sendBroadcast(intent);
+        intent.putExtra("song", currentSong);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
         if (isRepeatEnabled) {
-            // Phát lại bài hát hiện tại
-            stopMedia();
-            if (mediaPlayer != null) {
-                mediaPlayer.reset();
-            }
             initMediaPlayer();
         } else {
             nextSong();
         }
-        sendMiniPlayerBroadcast();
-    }
-
-    @Override
-    public void onPrepared(MediaPlayer mp) {
-        isMediaPreparing = false;
-        playMedia();
     }
 
     @Override
     public boolean onError(MediaPlayer mp, int what, int extra) {
+        broadcastError("Playback error: " + what);
         Log.e(TAG, "MediaPlayer error: what=" + what + ", extra=" + extra);
-        broadcastError("Media playback error: " + what);
         return false;
     }
 
     @Override
-    public boolean onInfo(MediaPlayer mp, int what, int extra) {
-        Log.d(TAG, "MediaPlayer info: what=" + what + ", extra=" + extra);
-        return false;
-    }
-
-    @Override
-    public void onSeekComplete(MediaPlayer mp) {
-    }
-
-    @Override
-    public void onBufferingUpdate(MediaPlayer mp, int percent) {
+    public IBinder onBind(Intent intent) {
+        return binder;
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
         if (mediaPlayer != null) {
-            stopMedia();
             mediaPlayer.release();
             mediaPlayer = null;
         }
         if (audioManager != null) {
-            removeAudioFocus();
+            audioManager.abandonAudioFocusRequest(audioFocusRequest);
         }
-        try {
-            unregisterReceiver(controlReceiver);
-            unregisterReceiver(becomingNoisyReceiver);
-            unregisterReceiver(playNewSongReceiver);
-        } catch (IllegalArgumentException e) {
-            Log.e(TAG, "Receiver not registered: " + e.getMessage());
-        }
-        handler.removeCallbacks(updateSeekbarRunnable);
-    }
-
-    @Nullable
-    @Override
-    public IBinder onBind(Intent intent) {
-        return binder;
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(broadcastReceiver);
+        unregisterReceiver(broadcastReceiver);
+        handler.removeCallbacks(updateSeekBarRunnable);
+        Log.d(TAG, "Service destroyed");
     }
 
     public boolean isPlaying() {
-        return mediaPlayer != null && mediaPlayer.isPlaying();
+        try {
+            return mediaPlayer != null && mediaPlayer.isPlaying();
+        } catch (IllegalStateException e) {
+            Log.e(TAG, "Error checking isPlaying: " + e.getMessage());
+            return false;
+        }
     }
 
     public Song getCurrentSong() {
         return currentSong;
     }
 
+    public boolean isRepeatEnabled() {
+        return isRepeatEnabled;
+    }
+
     public boolean isShuffleEnabled() {
         return isShuffleEnabled;
     }
 
-    public boolean isRepeatEnabled() {
-        return isRepeatEnabled;
+    public int getCurrentPosition() {
+        try {
+            return mediaPlayer != null ? mediaPlayer.getCurrentPosition() : 0;
+        } catch (IllegalStateException e) {
+            Log.e(TAG, "Error getting current position: " + e.getMessage());
+            return 0;
+        }
     }
 
     public class LocalBinder extends Binder {

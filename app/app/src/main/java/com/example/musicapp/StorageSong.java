@@ -35,7 +35,8 @@ public class StorageSong {
         String json = sharedPreferences.getString("songArrayList", null);
         Type type = new TypeToken<ArrayList<Song>>() {
         }.getType();
-        return gson.fromJson(json,type);
+        ArrayList<Song> result = gson.fromJson(json, type);
+        return  result != null ? result : new ArrayList<>();
     }
     public void storeSongIndex(int index){
         sharedPreferences = context.getSharedPreferences(STORAGE,Context.MODE_PRIVATE);

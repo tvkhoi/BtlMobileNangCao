@@ -13,18 +13,20 @@
         android:id="@+id/vg_fragMain"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        app:layout_constraintBottom_toTopOf="@id/bottomBar"
+        app:layout_constraintBottom_toTopOf="@id/frameMiniPlayer"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.0"
         tools:layout_editor_absoluteX="30dp"
         />
     <FrameLayout
         android:id="@+id/frameMiniPlayer"
-        android:background="@color/black"
+        android:background="@color/color_opacity_50"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="50dp"
-        app:layout_constraintBottom_toBottomOf="@id/bottomBar"
+        app:itemTextColor="@color/color_text"
+        app:itemIconTint="@color/color_text"
+        android:layout_marginBottom="2dp"
+        app:layout_constraintBottom_toTopOf="@id/bottomBar"
         />
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottomBar"

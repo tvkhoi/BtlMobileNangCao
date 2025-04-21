@@ -19,10 +19,16 @@ import java.util.ArrayList;
 public class PlaySongAdapter extends RecyclerView.Adapter<PlaySongAdapter.ViewHolder> {
     private ArrayList<Song> songArrayList;
     private Context context;
+    private OnSongClickListener listener;
 
-    public PlaySongAdapter(ArrayList<Song> songArrayList, Context context) {
+    public interface OnSongClickListener {
+        void onSongClick(int position);
+    }
+
+    public PlaySongAdapter(ArrayList<Song> songArrayList, Context context, OnSongClickListener listener) {
         this.songArrayList = songArrayList;
         this.context = context;
+        this.listener = listener;
     }
 
     @NonNull
