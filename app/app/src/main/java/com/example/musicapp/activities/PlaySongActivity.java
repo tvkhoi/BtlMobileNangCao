@@ -27,10 +27,13 @@ import com.example.musicapp.SongDownloadManager;
 import com.example.musicapp.StorageSong;
 import com.example.musicapp.adapters.PlaySongAdapter;
 import com.example.musicapp.models.Song;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+
 import java.util.ArrayList;
 
 public class PlaySongActivity extends AppCompatActivity {
-    private ImageView imgSong, imgPlayPause, imgNext, imgPrevious, imgRepeat, imgShuffle, imgMinimize, iconDownload_ActiPlaySong;
+    private ImageView imgSong, imgPlayPause, imgNext, imgPrevious, imgRepeat, imgShuffle, imgMinimize, iconDownload_ActiPlaySong, imgFavorite;
     private TextView tvSongName, tvArtist, tvCurrentTime, tvTotalTime;
     private SeekBar seekBar;
     private RecyclerView recyclerView;
@@ -43,6 +46,7 @@ public class PlaySongActivity extends AppCompatActivity {
     private boolean isRepeatEnabled = false;
     private boolean isShuffleEnabled = false;
     private static final String TAG = "PlaySongActivity";
+    private DatabaseReference songsRef;
 
     public static final String MINI_PLAYER = "MINI_PLAYER";
     public static final String PLAY_NEW_SONG_ACTION = "com.example.appmusic.PLAY_NEW_SONG";
@@ -56,6 +60,7 @@ public class PlaySongActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
+        songsRef = FirebaseDatabase.getInstance().getReference("FrameList/2/listSongs");
 
         initViews();
         loadSongData();
@@ -80,6 +85,7 @@ public class PlaySongActivity extends AppCompatActivity {
         imgMinimize = findViewById(R.id.imgToMinimizePlayer);
         recyclerView = findViewById(R.id.recy_ActiPlaySong);
         iconDownload_ActiPlaySong = findViewById(R.id.iconDownload_ActiPlaySong);
+        imgFavorite = findViewById(R.id.iconFavorite_ActiPlaySong);
     }
 
     private void loadSongData() {
@@ -224,13 +230,40 @@ public class PlaySongActivity extends AppCompatActivity {
                 }
             });
         });
+        imgFavorite.setOnClickListener(v -> {
+            Song song = songList.get(songIndex);
+            int newLiked = (song.getLiked() == 1) ? 0 : 1; // Đảo ngược giá trị liked: 1 -> 0, 0 -> 1
+            song.setLiked(newLiked);
+
+            // Lưu giá trị liked (kiểu int) lên Firebase
+            songsRef.child(String.valueOf(songIndex)).child("liked").setValue(newLiked)
+                    .addOnSuccessListener(aVoid -> {
+                        Log.d(TAG, "Successfully updated liked for song: " + song.getName());
+                        updateUI(song); // Cập nhật giao diện sau khi lưu thành công
+                        Toast.makeText(PlaySongActivity.this, "You liked this song!", Toast.LENGTH_SHORT).show();
+                    })
+                    .addOnFailureListener(e -> {
+                        Log.e(TAG, "Failed to update liked: " + e.getMessage());
+                        // Đảo ngược giá trị liked nếu lưu thất bại
+                        song.setLiked(newLiked == 1 ? 0 : 1);
+                        updateUI(song); // Cập nhật lại giao diện để khớp với giá trị thực tế
+                        Toast.makeText(PlaySongActivity.this, "Failed to update favorite status", Toast.LENGTH_SHORT).show();
+                    });
+        });
     }
 
     private void updateUI(Song song) {
         if (song == null) return;
+
+        if (song.getLiked()==1) {
+            Glide.with(this).load(R.drawable.favorite_click).into(imgFavorite);
+        } else {
+            Glide.with(this).load(R.drawable.favorite_icon).into(imgFavorite);
+        }
         Glide.with(this).load(song.getImageUrl()).into(imgSong);
         tvSongName.setText(song.getName());
         tvArtist.setText(song.getArtist());
+
         if (adapter != null) {
             adapter.notifyDataSetChanged();
         }

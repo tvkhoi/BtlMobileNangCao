@@ -9,7 +9,9 @@ public class Song implements Serializable {
     private String songFileUrl;
     private String artist;
     private long totalDuration;
+    private int liked;
     public Song() {
+
     }
 
     public String getArtist() {
@@ -60,5 +62,13 @@ public class Song implements Serializable {
 
     public void setSongFileUrl(String songFileUrl) {
         this.songFileUrl = songFileUrl;
+    }
+
+    public int getLiked() {
+        return liked;
+    }
+
+    public void setLiked(int liked) {
+        this.liked = liked;
     }
 }
