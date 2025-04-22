@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/linearLibraries"
+    android:layout_width="148dp"
+    android:layout_height="110dp"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@drawable/gradient_background_item_libraries"
+    >
+        <ImageView
+            android:id="@+id/icon_libraries"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginTop="8dp"
+            />
+        <TextView
+            android:id="@+id/nameItem_libraries"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Đã thích"
+            android:textSize="16sp"
+            android:textColor="#FFFFFF"
+            android:layout_marginBottom="4dp"/>
+        <TextView
+            android:id="@+id/numSong_libraries"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="120 bài"
+            android:textSize="12sp"
+            android:textColor="#80FFFFFF"/>
+</LinearLayout>

@@ -23,13 +23,14 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
 import com.example.musicapp.MediaPlayerService;
 import com.example.musicapp.R;
+import com.example.musicapp.SongDownloadManager;
 import com.example.musicapp.StorageSong;
 import com.example.musicapp.adapters.PlaySongAdapter;
 import com.example.musicapp.models.Song;
 import java.util.ArrayList;
 
 public class PlaySongActivity extends AppCompatActivity {
-    private ImageView imgSong, imgPlayPause, imgNext, imgPrevious, imgRepeat, imgShuffle, imgMinimize;
+    private ImageView imgSong, imgPlayPause, imgNext, imgPrevious, imgRepeat, imgShuffle, imgMinimize, iconDownload_ActiPlaySong;
     private TextView tvSongName, tvArtist, tvCurrentTime, tvTotalTime;
     private SeekBar seekBar;
     private RecyclerView recyclerView;
@@ -78,6 +79,7 @@ public class PlaySongActivity extends AppCompatActivity {
         imgShuffle = findViewById(R.id.RandomSong_icon);
         imgMinimize = findViewById(R.id.imgToMinimizePlayer);
         recyclerView = findViewById(R.id.recy_ActiPlaySong);
+        iconDownload_ActiPlaySong = findViewById(R.id.iconDownload_ActiPlaySong);
     }
 
     private void loadSongData() {
@@ -183,6 +185,44 @@ public class PlaySongActivity extends AppCompatActivity {
                 intent.putExtra("seekPosition", seekBar.getProgress());
                 LocalBroadcastManager.getInstance(PlaySongActivity.this).sendBroadcast(intent);
             }
+        });
+        iconDownload_ActiPlaySong.setOnClickListener(v -> {
+            Song song = songList.get(songIndex);
+            SongDownloadManager downloadManager = SongDownloadManager.getInstance(PlaySongActivity.this);
+
+            // Check if song is already downloaded
+            if (downloadManager.isSongDownloaded(song)) {
+                Toast.makeText(PlaySongActivity.this, "Song already downloaded", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            // Start download
+            downloadManager.downloadSong(song, new SongDownloadManager.DownloadCallback() {
+                @Override
+                public void onSuccess(String localPath) {
+                    // Update UI or notify user
+                    runOnUiThread(() -> {
+                        Toast.makeText(PlaySongActivity.this, "Download completed: " + song.getName(), Toast.LENGTH_SHORT).show();
+                        iconDownload_ActiPlaySong.setImageResource(R.drawable.icon_download); // Optional: Change icon
+                    });
+                }
+
+                @Override
+                public void onError(String errorMessage) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(PlaySongActivity.this, "Download failed: " + errorMessage, Toast.LENGTH_LONG).show();
+                    });
+                }
+
+                @Override
+                public void onProgress(int progress) {
+                    // Optional: Update progress UI
+                    runOnUiThread(() -> {
+                        Log.d(TAG, "Download progress: " + progress + "%");
+                        // Có thể hiển thị ProgressBar nếu cần
+                    });
+                }
+            });
         });
     }
 

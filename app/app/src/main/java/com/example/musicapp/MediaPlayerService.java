@@ -111,7 +111,9 @@ public class MediaPlayerService extends Service implements
             broadcastError("Invalid song data");
             return;
         }
-        if (currentSong.getSongFileUrl().startsWith("http") && !isNetworkAvailable()) {
+        String songUrl = currentSong.getSongFileUrl();
+        boolean isLocal = songUrl.startsWith("file://");
+        if (!isLocal && songUrl.startsWith("http") && !isNetworkAvailable()) {
             broadcastError("No network connection");
             return;
         }
@@ -130,10 +132,11 @@ public class MediaPlayerService extends Service implements
         mediaPlayer.setOnPreparedListener(this);
         mediaPlayer.setOnErrorListener(this);
         try {
-            mediaPlayer.setDataSource(currentSong.getSongFileUrl());
+            String dataSource = isLocal ? songUrl.substring(7) : songUrl;
+            mediaPlayer.setDataSource(dataSource);
             isPreparing = true;
             mediaPlayer.prepareAsync();
-            Log.d(TAG, "Preparing MediaPlayer for song: " + currentSong.getName());
+            Log.d(TAG, "Preparing MediaPlayer for song: " + currentSong.getName() + ", isLocal: " + isLocal);
         } catch (IOException e) {
             Log.e(TAG, "Failed to load song: " + e.getMessage());
             broadcastError("Failed to load song: " + e.getMessage());
