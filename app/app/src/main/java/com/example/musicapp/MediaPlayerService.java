@@ -5,16 +5,19 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Binder;
+import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
 import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import com.example.musicapp.activities.PlaySongActivity;
 import com.example.musicapp.models.Song;
@@ -65,6 +68,14 @@ public class MediaPlayerService extends Service implements
         StorageSong storage = StorageSong.getInstance();
         songList = storage.loadSongArrayList();
         songIndex = storage.loadSongIndex();
+
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+//                ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
+//                        != PackageManager.PERMISSION_GRANTED) {
+//            broadcastError("Notification permission required for playback");
+//            stopSelf();
+//            return START_NOT_STICKY;
+//        }
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "music_channel")
                 .setContentTitle("Music Player")
