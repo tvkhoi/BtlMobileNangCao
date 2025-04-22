@@ -92,7 +92,7 @@ public class PlaySongActivity extends AppCompatActivity {
             return;
         }
 
-        StorageSong storage = new StorageSong(this);
+        StorageSong storage = StorageSong.getInstance();
         storage.storeSongArrayList(songList);
         storage.storeSongIndex(songIndex);
 
@@ -109,12 +109,11 @@ public class PlaySongActivity extends AppCompatActivity {
     }
 
     private void setupRecyclerView() {
-        LinearLayoutManager linear = new LinearLayoutManager(this
-                ,LinearLayoutManager.VERTICAL,false);
+        LinearLayoutManager linear = new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
         recyclerView.setLayoutManager(linear);
         adapter = new PlaySongAdapter(songList, this, position -> {
             songIndex = position;
-            StorageSong storage = new StorageSong(this);
+            StorageSong storage = StorageSong.getInstance();
             storage.storeSongIndex(songIndex);
             Intent intent = new Intent(PLAY_NEW_SONG_ACTION);
             LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
@@ -140,8 +139,16 @@ public class PlaySongActivity extends AppCompatActivity {
             finish();
         });
         imgPlayPause.setOnClickListener(v -> {
-            Intent intent = new Intent(MediaPlayerService.ACTION_PLAY_PAUSE);
-            LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+            if (player != null && player.getCurrentSong() != null) {
+                isPlaying = !isPlaying;
+                imgPlayPause.setImageResource(isPlaying ? R.drawable.pause_icon : R.drawable.play_arrow);
+                Intent intent = new Intent(MediaPlayerService.ACTION_PLAY_PAUSE);
+                LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+                Log.d(TAG, "Play/Pause clicked, isPlaying toggled to: " + isPlaying);
+            } else {
+                Toast.makeText(this, "Player not ready", Toast.LENGTH_SHORT).show();
+                Log.w(TAG, "Play/Pause clicked: Player or current song is null");
+            }
         });
         imgNext.setOnClickListener(v -> {
             Intent intent = new Intent(MediaPlayerService.ACTION_NEXT);
@@ -246,7 +253,7 @@ public class PlaySongActivity extends AppCompatActivity {
                     songIndex = songList.indexOf(currentSong);
                     if (songIndex < 0) {
                         songIndex = intentSongIndex;
-                        new StorageSong(getApplicationContext()).storeSongIndex(songIndex);
+                        StorageSong.getInstance().storeSongIndex(songIndex);
                         Intent newSongIntent = new Intent(PLAY_NEW_SONG_ACTION);
                         LocalBroadcastManager.getInstance(PlaySongActivity.this).sendBroadcast(newSongIntent);
                     }
@@ -280,7 +287,7 @@ public class PlaySongActivity extends AppCompatActivity {
         filter.addAction(MediaPlayerService.REPEAT_STATUS);
         filter.addAction(MediaPlayerService.SHUFFLE_STATUS);
         filter.addAction(MediaPlayerService.ERROR_ACTION);
-        filter.addAction(MediaPlayerService.PLAYBACK_STARTED);
+        filter.addAction(MediaPlayerService.PLAYBACK_STATE_CHANGED);
         filter.addAction(MINI_PLAYER);
         LocalBroadcastManager.getInstance(this).registerReceiver(broadcastReceiver, filter);
     }
@@ -302,7 +309,7 @@ public class PlaySongActivity extends AppCompatActivity {
                 case MediaPlayerService.SONG_COMPLETED:
                 case MediaPlayerService.ACTION_NEXT:
                 case MediaPlayerService.ACTION_PREVIOUS:
-                    StorageSong storage = new StorageSong(context);
+                    StorageSong storage = StorageSong.getInstance();
                     songIndex = storage.loadSongIndex();
                     if (songIndex < 0 || songIndex >= songList.size()) {
                         songIndex = 0;
@@ -318,9 +325,18 @@ public class PlaySongActivity extends AppCompatActivity {
                     isPlaying = true;
                     imgPlayPause.setImageResource(R.drawable.pause_icon);
                     break;
-                case MediaPlayerService.ACTION_PLAY_PAUSE:
-                    isPlaying = !isPlaying;
+                case MediaPlayerService.PLAYBACK_STATE_CHANGED:
+                    isPlaying = intent.getBooleanExtra("isPlaying", isPlaying);
                     imgPlayPause.setImageResource(isPlaying ? R.drawable.pause_icon : R.drawable.play_arrow);
+                    Log.d(TAG, "PLAYBACK_STATE_CHANGED: isPlaying updated to " + isPlaying);
+                    break;
+                case MediaPlayerService.ACTION_PLAY_PAUSE:
+                    if (player == null || player.getCurrentSong() == null) {
+                        isPlaying = false;
+                        imgPlayPause.setImageResource(R.drawable.play_arrow);
+                        Toast.makeText(context, "Player not ready", Toast.LENGTH_SHORT).show();
+                        Log.w(TAG, "ACTION_PLAY_PAUSE: Player or current song is null");
+                    }
                     break;
                 case MediaPlayerService.REPEAT_STATUS:
                     isRepeatEnabled = intent.getBooleanExtra("isRepeatEnabled", false);
@@ -342,10 +358,6 @@ public class PlaySongActivity extends AppCompatActivity {
                     isPlaying = false;
                     imgPlayPause.setImageResource(R.drawable.play_arrow);
                     break;
-                case MediaPlayerService.PLAYBACK_STARTED:
-                    isPlaying = true;
-                    imgPlayPause.setImageResource(R.drawable.pause_icon);
-                    break;
             }
         }
     };
@@ -355,6 +367,9 @@ public class PlaySongActivity extends AppCompatActivity {
         super.onDestroy();
         if (serviceBound) {
             unbindService(serviceConnection);
+            Intent intent = new Intent(this, MediaPlayerService.class);
+            stopService(intent);
+            Log.d(TAG, "Stopped MediaPlayerService");
         }
         LocalBroadcastManager.getInstance(this).unregisterReceiver(broadcastReceiver);
         Log.d(TAG, "Activity destroyed");

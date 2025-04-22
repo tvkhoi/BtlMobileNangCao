@@ -68,8 +68,14 @@ public class MiniPlayerFragment extends Fragment {
     private void setupListeners() {
         miniPlayerContainer.setOnClickListener(v -> openPlaySongActivity());
         imgPlayPause.setOnClickListener(v -> {
-            Intent intent = new Intent(MediaPlayerService.ACTION_PLAY_PAUSE);
-            LocalBroadcastManager.getInstance(requireContext()).sendBroadcast(intent);
+            if (player != null && player.getCurrentSong() != null) {
+                Intent intent = new Intent(MediaPlayerService.ACTION_PLAY_PAUSE);
+                LocalBroadcastManager.getInstance(requireContext()).sendBroadcast(intent);
+                Log.d(TAG, "Play/Pause clicked");
+            } else {
+                showToast("Player not ready");
+                Log.w(TAG, "Play/Pause clicked: Player or current song is null");
+            }
         });
         imgNext.setOnClickListener(v -> {
             Intent intent = new Intent(MediaPlayerService.ACTION_NEXT);
@@ -100,7 +106,7 @@ public class MiniPlayerFragment extends Fragment {
             showToast("No song selected");
             return;
         }
-        StorageSong storage = new StorageSong(requireContext());
+        StorageSong storage = StorageSong.getInstance();
         ArrayList<Song> songList = storage.loadSongArrayList();
         int songIndex = storage.loadSongIndex();
         if (songList == null || songList.isEmpty() || songIndex < 0 || songIndex >= songList.size()) {
@@ -157,7 +163,6 @@ public class MiniPlayerFragment extends Fragment {
             MediaPlayerService.LocalBinder binder = (MediaPlayerService.LocalBinder) service;
             player = binder.getService();
             serviceBound = true;
-            imgPlayPause.setImageResource(isPlaying ? R.drawable.pause_icon : R.drawable.play_arrow);
             updateUI(player.getCurrentSong(), player.isPlaying(), player.getCurrentPosition());
             Log.d(TAG, "Service connected, current song: " + (player.getCurrentSong() != null ? player.getCurrentSong().getName() : "null"));
         }
@@ -179,7 +184,7 @@ public class MiniPlayerFragment extends Fragment {
         filter.addAction(MediaPlayerService.ACTION_PREVIOUS);
         filter.addAction(MediaPlayerService.ERROR_ACTION);
         filter.addAction(MediaPlayerService.SONG_COMPLETED);
-        filter.addAction(MediaPlayerService.PLAYBACK_STARTED);
+        filter.addAction(MediaPlayerService.PLAYBACK_STATE_CHANGED);
         LocalBroadcastManager.getInstance(requireContext()).registerReceiver(broadcastReceiver, filter);
     }
 
@@ -208,18 +213,23 @@ public class MiniPlayerFragment extends Fragment {
                     int currentPos = intent.getIntExtra("currentPosition", -1);
                     if (currentPos >= 0) seekBar.setProgress(currentPos);
                     break;
-                case MediaPlayerService.ACTION_PLAY_PAUSE:
-                    isPlaying = !isPlaying;
+                case MediaPlayerService.PLAYBACK_STATE_CHANGED:
+                    isPlaying = intent.getBooleanExtra("isPlaying", isPlaying);
                     imgPlayPause.setImageResource(isPlaying ? R.drawable.pause_icon : R.drawable.play_arrow);
+                    Log.d(TAG, "PLAYBACK_STATE_CHANGED: isPlaying updated to " + isPlaying);
+                    break;
+                case MediaPlayerService.ACTION_PLAY_PAUSE:
+                    if (player == null || player.getCurrentSong() == null) {
+                        isPlaying = false;
+                        imgPlayPause.setImageResource(R.drawable.play_arrow);
+                        showToast("Player not ready");
+                        Log.w(TAG, "ACTION_PLAY_PAUSE: Player or current song is null");
+                    }
                     break;
                 case MediaPlayerService.ERROR_ACTION:
                     String errorMessage = intent.getStringExtra("errorMessage");
                     showToast("Error: " + errorMessage);
                     miniPlayerContainer.setVisibility(View.GONE);
-                    break;
-                case MediaPlayerService.PLAYBACK_STARTED:
-                    isPlaying = true;
-                    imgPlayPause.setImageResource(R.drawable.pause_icon);
                     break;
             }
         }

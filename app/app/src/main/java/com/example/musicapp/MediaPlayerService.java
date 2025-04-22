@@ -52,7 +52,7 @@ public class MediaPlayerService extends Service implements
     public static final String ERROR_ACTION = "ERROR_ACTION";
     public static final String REPEAT_STATUS = "REPEAT_STATUS";
     public static final String SHUFFLE_STATUS = "SHUFFLE_STATUS";
-    public static final String PLAYBACK_STARTED = "PLAYBACK_STARTED";
+    public static final String PLAYBACK_STATE_CHANGED = "PLAYBACK_STATE_CHANGED";
 
     @Override
     public void onCreate() {
@@ -62,7 +62,7 @@ public class MediaPlayerService extends Service implements
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        StorageSong storage = new StorageSong(this);
+        StorageSong storage = StorageSong.getInstance();
         songList = storage.loadSongArrayList();
         songIndex = storage.loadSongIndex();
 
@@ -140,8 +140,9 @@ public class MediaPlayerService extends Service implements
             mediaPlayer.start();
             updateNotification();
             broadcastSongUpdate();
-            Intent intent = new Intent(PLAYBACK_STARTED);
-            LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+            Intent stateIntent = new Intent(PLAYBACK_STATE_CHANGED);
+            stateIntent.putExtra("isPlaying", true);
+            LocalBroadcastManager.getInstance(this).sendBroadcast(stateIntent);
             Log.d(TAG, "Playing song: " + currentSong.getName());
         }
     }
@@ -150,6 +151,9 @@ public class MediaPlayerService extends Service implements
         if (mediaPlayer != null && mediaPlayer.isPlaying()) {
             mediaPlayer.pause();
             updateNotification();
+            Intent stateIntent = new Intent(PLAYBACK_STATE_CHANGED);
+            stateIntent.putExtra("isPlaying", false);
+            LocalBroadcastManager.getInstance(this).sendBroadcast(stateIntent);
             Log.d(TAG, "Paused song: " + currentSong.getName());
         }
     }
@@ -172,7 +176,7 @@ public class MediaPlayerService extends Service implements
             songIndex = (songIndex + 1) % songList.size();
         }
         currentSong = songList.get(songIndex);
-        new StorageSong(this).storeSongIndex(songIndex);
+        StorageSong.getInstance().storeSongIndex(songIndex);
         Log.d(TAG, "Next song selected: " + currentSong.getName() + ", index: " + songIndex);
         initMediaPlayer();
         broadcastSongUpdate();
@@ -196,7 +200,7 @@ public class MediaPlayerService extends Service implements
             songIndex = (songIndex - 1 < 0) ? songList.size() - 1 : songIndex - 1;
         }
         currentSong = songList.get(songIndex);
-        new StorageSong(this).storeSongIndex(songIndex);
+        StorageSong.getInstance().storeSongIndex(songIndex);
         Log.d(TAG, "Previous song selected: " + currentSong.getName() + ", index: " + songIndex);
         initMediaPlayer();
         broadcastSongUpdate();
@@ -290,7 +294,7 @@ public class MediaPlayerService extends Service implements
             Log.d(TAG, "Received broadcast: " + action);
             switch (action) {
                 case PlaySongActivity.PLAY_NEW_SONG_ACTION:
-                    StorageSong storage = new StorageSong(context);
+                    StorageSong storage = StorageSong.getInstance();
                     songIndex = storage.loadSongIndex();
                     songList = storage.loadSongArrayList();
                     if (songList == null || songList.isEmpty() || songIndex < 0 || songIndex >= songList.size()) {
