@@ -111,7 +111,7 @@ public class SongDownloadManager {
                     jsonSong.put("name", song.getName());
                     jsonSong.put("artist", song.getArtist());
                     jsonSong.put("imageUrl", song.getImageUrl());
-                    jsonSong.put("liked", song.getLiked());
+                    //jsonSong.put("liked", song.getLiked());
                     long duration = 0;
                     MediaMetadataRetriever retriever = new MediaMetadataRetriever();
                     try {
@@ -138,7 +138,7 @@ public class SongDownloadManager {
                 jsonSong.put("artist", song.getArtist());
                 jsonSong.put("songFileUrl", newSongFileUrl);
                 jsonSong.put("imageUrl", song.getImageUrl());
-                jsonSong.put("liked", song.getLiked());
+                //jsonSong.put("liked", song.getLiked());
                 long duration = 0;
                 MediaMetadataRetriever retriever = new MediaMetadataRetriever();
                 try {
@@ -190,8 +190,8 @@ public class SongDownloadManager {
                 song.setArtist(jsonSong.getString("artist"));
                 song.setSongFileUrl(jsonSong.getString("songFileUrl"));
                 song.setImageUrl(jsonSong.optString("imageUrl", ""));
-                song.setTotalDuration(jsonSong.getLong("totalDuration"));
-                song.setLiked(jsonSong.getInt("liked"));
+                song.setTotalDuration(jsonSong.getInt("totalDuration"));
+                //song.setLiked(jsonSong.getInt("liked"));
                 // Verify file exists
                 String localPath = song.getSongFileUrl().startsWith("file://") ?
                         song.getSongFileUrl().substring(7) : song.getSongFileUrl();

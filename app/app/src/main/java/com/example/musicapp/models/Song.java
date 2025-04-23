@@ -1,74 +1,34 @@
 package com.example.musicapp.models;
 
-
 import java.io.Serializable;
 
 public class Song implements Serializable {
-    private String name; // Tên nghệ sĩ
-    private String imageUrl; // ID của hình ảnh bai hat
-    private String songFileUrl;
+    private String songId;
+    private String name;
+    private String artistId;
     private String artist;
-    private long totalDuration;
-    private int liked;
-    public Song() {
+    private String imageUrl;
+    private String songFileUrl;
+    private int totalDuration;
 
-    }
+    public Song() {}
 
-    public String getArtist() {
-        return artist;
+    public String getSongId() {
+        return songId;
     }
-
-    public void setArtist(String artist) {
-        this.artist = artist;
+    public void setSongId(String songId) {
+        this.songId = songId;
     }
-
-    public Song(String name, String imageUrl, String songFileUrl) {
-        this.name = name;
-        this.imageUrl = imageUrl;
-        this.songFileUrl = songFileUrl;
-    }
-
-    public Song(String name, String imageUrl) {
-        this.name = name;
-        this.imageUrl = imageUrl;
-    }
-
-    public long getTotalDuration() {
-        return totalDuration;
-    }
-
-    public void setTotalDuration(long duration) {
-        this.totalDuration = duration;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public void setImageUrl(String imageUrl) {
-        this.imageUrl = imageUrl;
-    }
-
-    public String getName() {
-            return name;
-        }
-    public String getImageUrl() {
-        return imageUrl;
-    }
-
-    public String getSongFileUrl() {
-        return songFileUrl;
-    }
-
-    public void setSongFileUrl(String songFileUrl) {
-        this.songFileUrl = songFileUrl;
-    }
-
-    public int getLiked() {
-        return liked;
-    }
-
-    public void setLiked(int liked) {
-        this.liked = liked;
-    }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public String getArtistId() { return artistId; }
+    public void setArtistId(String artistId) { this.artistId = artistId; }
+    public String getArtist() { return artist; }
+    public void setArtist(String artist) { this.artist = artist; }
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+    public String getSongFileUrl() { return songFileUrl; }
+    public void setSongFileUrl(String songFileUrl) { this.songFileUrl = songFileUrl; }
+    public int getTotalDuration() { return totalDuration; }
+    public void setTotalDuration(int totalDuration) { this.totalDuration = totalDuration; }
 }

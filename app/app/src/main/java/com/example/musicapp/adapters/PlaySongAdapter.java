@@ -31,6 +31,12 @@ public class PlaySongAdapter extends RecyclerView.Adapter<PlaySongAdapter.ViewHo
         this.listener = listener;
     }
 
+    public void updateSongs(ArrayList<Song> newSongs) {
+        this.songArrayList = newSongs;
+        notifyDataSetChanged();
+    }
+
+
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -46,7 +52,8 @@ public class PlaySongAdapter extends RecyclerView.Adapter<PlaySongAdapter.ViewHo
         Glide.with(context).load(song.getImageUrl())
                 .placeholder(R.drawable.song)
                 .into(holder.imgSong);
-        holder.nameArtist.setText(song.getArtist());
+        holder.nameArtist.setText(song.getArtistId());
+        holder.itemView.setOnClickListener(v -> listener.onSongClick(position));
     }
 
     @Override

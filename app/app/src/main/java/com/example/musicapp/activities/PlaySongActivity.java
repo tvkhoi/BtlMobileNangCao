@@ -1,12 +1,12 @@
 package com.example.musicapp.activities;
 
-import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.IBinder;
 import android.util.Log;
 import android.widget.ImageView;
@@ -17,39 +17,38 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
-import com.example.musicapp.MediaPlayerService;
 import com.example.musicapp.R;
 import com.example.musicapp.SongDownloadManager;
-import com.example.musicapp.StorageSong;
 import com.example.musicapp.adapters.PlaySongAdapter;
 import com.example.musicapp.models.Song;
-import com.google.firebase.database.DatabaseReference;
-import com.google.firebase.database.FirebaseDatabase;
+import com.example.musicapp.services.MediaPlayerService;
+import com.example.musicapp.viewmodels.PlaySongViewModel;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class PlaySongActivity extends AppCompatActivity {
-    private ImageView imgSong, imgPlayPause, imgNext, imgPrevious, imgRepeat, imgShuffle, imgMinimize, iconDownload_ActiPlaySong, imgFavorite;
+    private ImageView imgSong, imgPlayPause, imgNext, imgPrevious, imgRepeat, imgShuffle, imgMinimize, iconDownload_ActiPlaySong;
     private TextView tvSongName, tvArtist, tvCurrentTime, tvTotalTime;
     private SeekBar seekBar;
     private RecyclerView recyclerView;
     private PlaySongAdapter adapter;
-    private ArrayList<Song> songList;
+    private List<Song> songList;
     private int songIndex;
+    private PlaySongViewModel viewModel;
     private MediaPlayerService player;
     private boolean serviceBound = false;
-    private boolean isPlaying = false;
-    private boolean isRepeatEnabled = false;
-    private boolean isShuffleEnabled = false;
     private static final String TAG = "PlaySongActivity";
-    private DatabaseReference songsRef;
+    private HandlerThread seekBarThread;
+    private Handler seekBarHandler;
+    private Runnable updateSeekBar;
 
     public static final String MINI_PLAYER = "MINI_PLAYER";
-    public static final String PLAY_NEW_SONG_ACTION = "com.example.appmusic.PLAY_NEW_SONG";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,14 +59,12 @@ public class PlaySongActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
-        songsRef = FirebaseDatabase.getInstance().getReference("FrameList/2/listSongs");
 
         initViews();
         loadSongData();
         setupRecyclerView();
-        setupListeners();
-        registerReceivers();
         startAndBindService();
+        setupSeekBarThread();
     }
 
     private void initViews() {
@@ -85,14 +82,12 @@ public class PlaySongActivity extends AppCompatActivity {
         imgMinimize = findViewById(R.id.imgToMinimizePlayer);
         recyclerView = findViewById(R.id.recy_ActiPlaySong);
         iconDownload_ActiPlaySong = findViewById(R.id.iconDownload_ActiPlaySong);
-        imgFavorite = findViewById(R.id.iconFavorite_ActiPlaySong);
     }
 
     private void loadSongData() {
         songList = (ArrayList<Song>) getIntent().getSerializableExtra("songList");
         songIndex = getIntent().getIntExtra("position", -1);
         int currentPosition = getIntent().getIntExtra("currentPosition", 0);
-        isPlaying = getIntent().getBooleanExtra("isPlaying", false);
 
         if (songList == null || songList.isEmpty() || songIndex < 0 || songIndex >= songList.size()) {
             Toast.makeText(this, "Invalid song data", Toast.LENGTH_SHORT).show();
@@ -100,39 +95,91 @@ public class PlaySongActivity extends AppCompatActivity {
             return;
         }
 
-        StorageSong storage = StorageSong.getInstance();
-        storage.storeSongArrayList(songList);
-        storage.storeSongIndex(songIndex);
-
         Song song = songList.get(songIndex);
         updateUI(song);
-        seekBar.setMax((int) song.getTotalDuration());
-        tvTotalTime.setText(formatTime((int) song.getTotalDuration()));
         if (currentPosition > 0) {
             seekBar.setProgress(currentPosition);
             tvCurrentTime.setText(formatTime(currentPosition));
         }
-        imgPlayPause.setImageResource(isPlaying ? R.drawable.pause_icon : R.drawable.play_arrow);
         Log.d(TAG, "Loaded song: " + song.getName() + ", index: " + songIndex);
     }
 
+    private void setupViewModel() {
+        viewModel = new ViewModelProvider(this).get(PlaySongViewModel.class);
+        viewModel.setSongList((ArrayList<Song>) songList, songIndex);
+
+        // Song and index observers
+        viewModel.getCurrentSong().observe(this, song -> {
+            if (song != null) {
+                updateUI(song);
+                Integer index = viewModel.getSongIndex().getValue();
+                if (index != null && index >= 0 && index < songList.size()) {
+                    songIndex = index;
+                    adapter.notifyDataSetChanged();
+                }
+                seekBar.setProgress(0);
+                tvCurrentTime.setText(formatTime(0));
+                Log.d(TAG, "Current song changed: " + song.getName());
+            }
+        });
+        viewModel.getSongIndex().observe(this, index -> {
+            if (index != null && index >= 0 && index < songList.size()) {
+                songIndex = index;
+                adapter.notifyDataSetChanged();
+                Log.d(TAG, "Song index updated: " + index);
+            }
+        });
+
+        // Playback state observers
+        viewModel.getIsPlaying().observe(this, isPlaying -> {
+            if (isPlaying != null) {
+                imgPlayPause.setImageResource(isPlaying ? R.drawable.pause_icon : R.drawable.play_arrow);
+                if (isPlaying) startSeekBarUpdate(); else stopSeekBarUpdate();
+                Log.d(TAG, "Is playing: " + isPlaying);
+            }
+        });
+        viewModel.getSongDuration().observe(this, duration -> {
+            if (duration != null && duration > 0) {
+                seekBar.setMax(duration);
+                tvTotalTime.setText(formatTime(duration));
+                Log.d(TAG, "Song duration: " + duration);
+            }
+        });
+        viewModel.getResetSeekBar().observe(this, reset -> {
+            if (reset != null && reset) {
+                seekBar.setProgress(0);
+                tvCurrentTime.setText(formatTime(0));
+                Log.d(TAG, "Reset SeekBar triggered");
+            }
+        });
+
+        // Error and song list observers
+        viewModel.getError().observe(this, error -> {
+            if (error != null) {
+                Toast.makeText(this, "Error: " + error, Toast.LENGTH_LONG).show();
+                Log.e(TAG, "Error: " + error);
+            }
+        });
+        viewModel.getSongList().observe(this, songs -> {
+            if (songs != null) {
+                songList = new ArrayList<>(songs);
+                if (adapter != null) {
+                    adapter.updateSongs((ArrayList<Song>) songList);
+                }
+                Log.d(TAG, "Song list updated: size=" + songs.size());
+            }
+        });
+    }
+
     private void setupRecyclerView() {
-        LinearLayoutManager linear = new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
-        recyclerView.setLayoutManager(linear);
-        adapter = new PlaySongAdapter(songList, this, position -> {
+        recyclerView.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false));
+        adapter = new PlaySongAdapter(new ArrayList<>(songList), this, position -> {
             songIndex = position;
-            StorageSong storage = StorageSong.getInstance();
-            storage.storeSongIndex(songIndex);
-            Intent intent = new Intent(PLAY_NEW_SONG_ACTION);
-            LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
-            updateUI(songList.get(songIndex));
-            seekBar.setMax((int) songList.get(songIndex).getTotalDuration());
-            tvTotalTime.setText(formatTime((int) songList.get(songIndex).getTotalDuration()));
-            isPlaying = true;
-            imgPlayPause.setImageResource(R.drawable.pause_icon);
+            viewModel.setSongList((ArrayList<Song>) songList, songIndex);
+            viewModel.playSong(songList.get(songIndex));
             seekBar.setProgress(0);
             tvCurrentTime.setText(formatTime(0));
-            Log.d(TAG, "RecyclerView song selected: " + songList.get(songIndex).getName());
+            Log.d(TAG, "Selected song from recycler: index=" + position);
         });
         recyclerView.setAdapter(adapter);
     }
@@ -140,134 +187,106 @@ public class PlaySongActivity extends AppCompatActivity {
     private void setupListeners() {
         imgMinimize.setOnClickListener(v -> {
             Intent intent = new Intent(MINI_PLAYER);
-            intent.putExtra("song", songList.get(songIndex));
-            intent.putExtra("currentPosition", seekBar.getProgress());
-            intent.putExtra("isPlaying", isPlaying);
+            intent.putExtra("song", viewModel.getCurrentSong().getValue());
+            intent.putExtra("currentPosition", player != null ? player.getCurrentPosition() : seekBar.getProgress());
+            intent.putExtra("isPlaying", Boolean.TRUE.equals(viewModel.getIsPlaying().getValue()));
             LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
             finish();
+            Log.d(TAG, "Minimize clicked, broadcast sent");
         });
-        imgPlayPause.setOnClickListener(v -> {
-            if (player != null && player.getCurrentSong() != null) {
-                isPlaying = !isPlaying;
-                imgPlayPause.setImageResource(isPlaying ? R.drawable.pause_icon : R.drawable.play_arrow);
-                Intent intent = new Intent(MediaPlayerService.ACTION_PLAY_PAUSE);
-                LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
-                Log.d(TAG, "Play/Pause clicked, isPlaying toggled to: " + isPlaying);
-            } else {
-                Toast.makeText(this, "Player not ready", Toast.LENGTH_SHORT).show();
-                Log.w(TAG, "Play/Pause clicked: Player or current song is null");
-            }
-        });
-        imgNext.setOnClickListener(v -> {
-            Intent intent = new Intent(MediaPlayerService.ACTION_NEXT);
-            LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
-        });
-        imgPrevious.setOnClickListener(v -> {
-            Intent intent = new Intent(MediaPlayerService.ACTION_PREVIOUS);
-            LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
-        });
+        imgPlayPause.setOnClickListener(v -> viewModel.togglePlayPause());
+        imgNext.setOnClickListener(v -> viewModel.playNextSong());
+        imgPrevious.setOnClickListener(v -> viewModel.playPreviousSong());
         imgRepeat.setOnClickListener(v -> {
-            Intent intent = new Intent(MediaPlayerService.ACTION_TOGGLE_REPEAT);
-            LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+            boolean newRepeatState = !viewModel.isRepeatEnabled();
+            viewModel.setRepeatEnabled(newRepeatState);
+            imgRepeat.setImageResource(newRepeatState ? R.drawable.icon_repeat_50_on : R.drawable.repeat_icon);
+            Toast.makeText(this, newRepeatState ? "Repeat enabled" : "Repeat disabled", Toast.LENGTH_SHORT).show();
+            Log.d(TAG, "Repeat toggled: " + newRepeatState);
         });
         imgShuffle.setOnClickListener(v -> {
-            Intent intent = new Intent(MediaPlayerService.ACTION_TOGGLE_SHUFFLE);
-            LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+            boolean newShuffleState = !viewModel.isShuffleEnabled();
+            viewModel.setShuffleEnabled(newShuffleState);
+            imgShuffle.setImageResource(newShuffleState ? R.drawable.icons_random_24_on : R.drawable.icons_random_24_off);
+            Toast.makeText(this, newShuffleState ? "Shuffle enabled" : "Shuffle disabled", Toast.LENGTH_SHORT).show();
+            Log.d(TAG, "Shuffle toggled: " + newShuffleState);
         });
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                if (fromUser) {
-                    tvCurrentTime.setText(formatTime(progress));
-                }
+                if (fromUser) tvCurrentTime.setText(formatTime(progress));
             }
-
             @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {}
-
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                stopSeekBarUpdate();
+            }
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-                Intent intent = new Intent(MediaPlayerService.ACTION_SEEK_TO);
-                intent.putExtra("seekPosition", seekBar.getProgress());
-                LocalBroadcastManager.getInstance(PlaySongActivity.this).sendBroadcast(intent);
+                if (player != null) player.seekTo(seekBar.getProgress());
+                startSeekBarUpdate();
             }
         });
         iconDownload_ActiPlaySong.setOnClickListener(v -> {
-            Song song = songList.get(songIndex);
-            SongDownloadManager downloadManager = SongDownloadManager.getInstance(PlaySongActivity.this);
-
-            // Check if song is already downloaded
-            if (downloadManager.isSongDownloaded(song)) {
-                Toast.makeText(PlaySongActivity.this, "Song already downloaded", Toast.LENGTH_SHORT).show();
+            Song song = viewModel.getCurrentSong().getValue();
+            if (song == null) {
+                Toast.makeText(this, "No song selected", Toast.LENGTH_SHORT).show();
                 return;
             }
-
-            // Start download
+            SongDownloadManager downloadManager = SongDownloadManager.getInstance(this);
+            if (downloadManager.isSongDownloaded(song)) {
+                Toast.makeText(this, "Song already downloaded", Toast.LENGTH_SHORT).show();
+                return;
+            }
             downloadManager.downloadSong(song, new SongDownloadManager.DownloadCallback() {
                 @Override
                 public void onSuccess(String localPath) {
-                    // Update UI or notify user
-                    runOnUiThread(() -> {
-                        Toast.makeText(PlaySongActivity.this, "Download completed: " + song.getName(), Toast.LENGTH_SHORT).show();
-                        iconDownload_ActiPlaySong.setImageResource(R.drawable.icon_download); // Optional: Change icon
-                    });
+                    runOnUiThread(() -> Toast.makeText(PlaySongActivity.this, "Download completed: " + song.getName(), Toast.LENGTH_SHORT).show());
                 }
-
                 @Override
                 public void onError(String errorMessage) {
-                    runOnUiThread(() -> {
-                        Toast.makeText(PlaySongActivity.this, "Download failed: " + errorMessage, Toast.LENGTH_LONG).show();
-                    });
+                    runOnUiThread(() -> Toast.makeText(PlaySongActivity.this, "Download failed: " + errorMessage, Toast.LENGTH_LONG).show());
                 }
-
                 @Override
-                public void onProgress(int progress) {
-                    // Optional: Update progress UI
-                    runOnUiThread(() -> {
-                        Log.d(TAG, "Download progress: " + progress + "%");
-                        // Có thể hiển thị ProgressBar nếu cần
-                    });
-                }
+                public void onProgress(int progress) {}
             });
-        });
-        imgFavorite.setOnClickListener(v -> {
-            Song song = songList.get(songIndex);
-            int newLiked = (song.getLiked() == 1) ? 0 : 1; // Đảo ngược giá trị liked: 1 -> 0, 0 -> 1
-            song.setLiked(newLiked);
-
-            // Lưu giá trị liked (kiểu int) lên Firebase
-            songsRef.child(String.valueOf(songIndex)).child("liked").setValue(newLiked)
-                    .addOnSuccessListener(aVoid -> {
-                        Log.d(TAG, "Successfully updated liked for song: " + song.getName());
-                        updateUI(song); // Cập nhật giao diện sau khi lưu thành công
-                        Toast.makeText(PlaySongActivity.this, "You liked this song!", Toast.LENGTH_SHORT).show();
-                    })
-                    .addOnFailureListener(e -> {
-                        Log.e(TAG, "Failed to update liked: " + e.getMessage());
-                        // Đảo ngược giá trị liked nếu lưu thất bại
-                        song.setLiked(newLiked == 1 ? 0 : 1);
-                        updateUI(song); // Cập nhật lại giao diện để khớp với giá trị thực tế
-                        Toast.makeText(PlaySongActivity.this, "Failed to update favorite status", Toast.LENGTH_SHORT).show();
-                    });
         });
     }
 
     private void updateUI(Song song) {
         if (song == null) return;
+        Glide.with(this).load(song.getImageUrl() != null ? song.getImageUrl() : R.drawable.song).into(imgSong);
+        tvSongName.setText(song.getName() != null ? song.getName() : "Unknown");
+        tvArtist.setText(song.getArtist() != null ? song.getArtist() : "Unknown");
+        if (adapter != null) adapter.notifyItemChanged(songIndex);
+        Log.d(TAG, "UI updated: song=" + song.getName());
+    }
 
-        if (song.getLiked()==1) {
-            Glide.with(this).load(R.drawable.favorite_click).into(imgFavorite);
-        } else {
-            Glide.with(this).load(R.drawable.favorite_icon).into(imgFavorite);
-        }
-        Glide.with(this).load(song.getImageUrl()).into(imgSong);
-        tvSongName.setText(song.getName());
-        tvArtist.setText(song.getArtist());
+    private void setupSeekBarThread() {
+        seekBarThread = new HandlerThread("SeekBarUpdateThread");
+        seekBarThread.start();
+        seekBarHandler = new Handler(seekBarThread.getLooper());
+    }
 
-        if (adapter != null) {
-            adapter.notifyDataSetChanged();
+    private void startSeekBarUpdate() {
+        stopSeekBarUpdate();
+        updateSeekBar = () -> {
+            if (player != null && player.isPlaying() && viewModel.getCurrentSong().getValue() != null) {
+                int currentPosition = player.getCurrentPosition();
+                runOnUiThread(() -> {
+                    seekBar.setProgress(currentPosition);
+                    tvCurrentTime.setText(formatTime(currentPosition));
+                });
+                Log.d(TAG, "SeekBar updated: position=" + currentPosition);
+            }
+            seekBarHandler.postDelayed(updateSeekBar, 500);
+        };
+        seekBarHandler.post(updateSeekBar);
+    }
+
+    private void stopSeekBarUpdate() {
+        if (updateSeekBar != null) {
+            seekBarHandler.removeCallbacks(updateSeekBar);
         }
-        Log.d(TAG, "UI updated for song: " + song.getName());
     }
 
     private String formatTime(int millis) {
@@ -289,162 +308,40 @@ public class PlaySongActivity extends AppCompatActivity {
             MediaPlayerService.LocalBinder binder = (MediaPlayerService.LocalBinder) service;
             player = binder.getService();
             serviceBound = true;
-            isRepeatEnabled = player.isRepeatEnabled();
-            isShuffleEnabled = player.isShuffleEnabled();
-            isPlaying = player.isPlaying();
-            imgRepeat.setImageResource(isRepeatEnabled ? R.drawable.icon_repeat_50_on : R.drawable.repeat_icon);
-            imgShuffle.setImageResource(isShuffleEnabled ? R.drawable.icons_random_24_on : R.drawable.icons_random_24_off);
-            imgPlayPause.setImageResource(isPlaying ? R.drawable.pause_icon : R.drawable.play_arrow);
-
-            Song currentSong = player.getCurrentSong();
-            if (currentSong != null && songList != null) {
-                int intentSongIndex = getIntent().getIntExtra("position", -1);
-                int intentCurrentPosition = getIntent().getIntExtra("currentPosition", 0);
-                boolean intentIsPlaying = getIntent().getBooleanExtra("isPlaying", false);
-                String intentSongUrl = songList.get(intentSongIndex).getSongFileUrl();
-                String currentSongUrl = currentSong.getSongFileUrl();
-
-                if (intentSongIndex >= 0 && intentSongUrl != null && currentSongUrl != null &&
-                        intentSongUrl.trim().equals(currentSongUrl.trim())) {
-                    songIndex = intentSongIndex;
-                    isPlaying = intentIsPlaying;
-                    updateUI(currentSong);
-                    seekBar.setMax((int) currentSong.getTotalDuration());
-                    tvTotalTime.setText(formatTime((int) currentSong.getTotalDuration()));
-                    if (intentCurrentPosition > 0) {
-                        seekBar.setProgress(intentCurrentPosition);
-                        tvCurrentTime.setText(formatTime(intentCurrentPosition));
-                        if (player.getCurrentPosition() != intentCurrentPosition && !player.isPlaying()) {
-                            Intent seekIntent = new Intent(MediaPlayerService.ACTION_SEEK_TO);
-                            seekIntent.putExtra("seekPosition", intentCurrentPosition);
-                            LocalBroadcastManager.getInstance(PlaySongActivity.this).sendBroadcast(seekIntent);
-                        }
-                    }
-                    imgPlayPause.setImageResource(isPlaying ? R.drawable.pause_icon : R.drawable.play_arrow);
-                    Log.d(TAG, "Service connected: Same song, using intent data, position=" + intentCurrentPosition);
-                } else {
-                    songIndex = songList.indexOf(currentSong);
-                    if (songIndex < 0) {
-                        songIndex = intentSongIndex;
-                        StorageSong.getInstance().storeSongIndex(songIndex);
-                        Intent newSongIntent = new Intent(PLAY_NEW_SONG_ACTION);
-                        LocalBroadcastManager.getInstance(PlaySongActivity.this).sendBroadcast(newSongIntent);
-                    }
-                    updateUI(currentSong);
-                    seekBar.setMax((int) currentSong.getTotalDuration());
-                    tvTotalTime.setText(formatTime((int) currentSong.getTotalDuration()));
-                    int currentPosition = player.getCurrentPosition();
-                    if (currentPosition > 0) {
-                        seekBar.setProgress(currentPosition);
-                        tvCurrentTime.setText(formatTime(currentPosition));
-                    }
-                    Log.d(TAG, "Service connected: Different song, songIndex=" + songIndex);
+            setupViewModel();
+            setupListeners();
+            viewModel.setMediaPlayerService(player);
+            boolean isPlaying = getIntent().getBooleanExtra("isPlaying", false);
+            if (isPlaying) {
+                viewModel.playSong(songList.get(songIndex));
+                int currentPosition = getIntent().getIntExtra("currentPosition", 0);
+                if (currentPosition > 0) {
+                    player.seekTo(currentPosition);
                 }
             }
+            imgRepeat.setImageResource(viewModel.isRepeatEnabled() ? R.drawable.icon_repeat_50_on : R.drawable.repeat_icon);
+            imgShuffle.setImageResource(viewModel.isShuffleEnabled() ? R.drawable.icons_random_24_on : R.drawable.icons_random_24_off);
+            Log.d(TAG, "Service connected, repeat=" + viewModel.isRepeatEnabled() + ", shuffle=" + viewModel.isShuffleEnabled());
         }
 
         @Override
         public void onServiceDisconnected(ComponentName name) {
             serviceBound = false;
             player = null;
-        }
-    };
-
-    private void registerReceivers() {
-        IntentFilter filter = new IntentFilter();
-        filter.addAction(MediaPlayerService.UPDATE_SEEKBAR);
-        filter.addAction(MediaPlayerService.SONG_COMPLETED);
-        filter.addAction(MediaPlayerService.ACTION_PLAY_PAUSE);
-        filter.addAction(MediaPlayerService.ACTION_NEXT);
-        filter.addAction(MediaPlayerService.ACTION_PREVIOUS);
-        filter.addAction(MediaPlayerService.REPEAT_STATUS);
-        filter.addAction(MediaPlayerService.SHUFFLE_STATUS);
-        filter.addAction(MediaPlayerService.ERROR_ACTION);
-        filter.addAction(MediaPlayerService.PLAYBACK_STATE_CHANGED);
-        filter.addAction(MINI_PLAYER);
-        LocalBroadcastManager.getInstance(this).registerReceiver(broadcastReceiver, filter);
-    }
-
-    private final BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            if (action == null) return;
-            Log.d(TAG, "Received broadcast: " + action);
-            switch (action) {
-                case MediaPlayerService.UPDATE_SEEKBAR:
-                    int currentPos = intent.getIntExtra("currentPosition", -1);
-                    if (currentPos >= 0) {
-                        seekBar.setProgress(currentPos);
-                        tvCurrentTime.setText(formatTime(currentPos));
-                    }
-                    break;
-                case MediaPlayerService.SONG_COMPLETED:
-                case MediaPlayerService.ACTION_NEXT:
-                case MediaPlayerService.ACTION_PREVIOUS:
-                    StorageSong storage = StorageSong.getInstance();
-                    songIndex = storage.loadSongIndex();
-                    if (songIndex < 0 || songIndex >= songList.size()) {
-                        songIndex = 0;
-                        storage.storeSongIndex(songIndex);
-                        Toast.makeText(context, "Song index reset to 0 due to invalid value", Toast.LENGTH_SHORT).show();
-                    }
-                    Song song = songList.get(songIndex);
-                    updateUI(song);
-                    seekBar.setMax((int) song.getTotalDuration());
-                    tvTotalTime.setText(formatTime((int) song.getTotalDuration()));
-                    seekBar.setProgress(0);
-                    tvCurrentTime.setText(formatTime(0));
-                    isPlaying = true;
-                    imgPlayPause.setImageResource(R.drawable.pause_icon);
-                    break;
-                case MediaPlayerService.PLAYBACK_STATE_CHANGED:
-                    isPlaying = intent.getBooleanExtra("isPlaying", isPlaying);
-                    imgPlayPause.setImageResource(isPlaying ? R.drawable.pause_icon : R.drawable.play_arrow);
-                    Log.d(TAG, "PLAYBACK_STATE_CHANGED: isPlaying updated to " + isPlaying);
-                    break;
-                case MediaPlayerService.ACTION_PLAY_PAUSE:
-                    if (player == null || player.getCurrentSong() == null) {
-                        isPlaying = false;
-                        imgPlayPause.setImageResource(R.drawable.play_arrow);
-                        Toast.makeText(context, "Player not ready", Toast.LENGTH_SHORT).show();
-                        Log.w(TAG, "ACTION_PLAY_PAUSE: Player or current song is null");
-                    }
-                    break;
-                case MediaPlayerService.REPEAT_STATUS:
-                    isRepeatEnabled = intent.getBooleanExtra("isRepeatEnabled", false);
-                    imgRepeat.setImageResource(isRepeatEnabled ? R.drawable.icon_repeat_50_on : R.drawable.repeat_icon);
-                    if (isRepeatEnabled && isShuffleEnabled) {
-                        Toast.makeText(context, "Repeat enabled: Shuffle will apply when repeat is off", Toast.LENGTH_SHORT).show();
-                    }
-                    break;
-                case MediaPlayerService.SHUFFLE_STATUS:
-                    isShuffleEnabled = intent.getBooleanExtra("isShuffleEnabled", false);
-                    imgShuffle.setImageResource(isShuffleEnabled ? R.drawable.icons_random_24_on : R.drawable.icons_random_24_off);
-                    if (isRepeatEnabled && isShuffleEnabled) {
-                        Toast.makeText(context, "Repeat enabled: Shuffle will apply when repeat is off", Toast.LENGTH_SHORT).show();
-                    }
-                    break;
-                case MediaPlayerService.ERROR_ACTION:
-                    String errorMessage = intent.getStringExtra("errorMessage");
-                    Toast.makeText(context, "Error: " + errorMessage, Toast.LENGTH_LONG).show();
-                    isPlaying = false;
-                    imgPlayPause.setImageResource(R.drawable.play_arrow);
-                    break;
-            }
+            Log.d(TAG, "Service disconnected");
         }
     };
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        stopSeekBarUpdate();
+        if (seekBarThread != null) {
+            seekBarThread.quitSafely();
+        }
         if (serviceBound) {
             unbindService(serviceConnection);
-            Intent intent = new Intent(this, MediaPlayerService.class);
-            stopService(intent);
-            Log.d(TAG, "Stopped MediaPlayerService");
+            serviceBound = false;
         }
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(broadcastReceiver);
-        Log.d(TAG, "Activity destroyed");
     }
 }
