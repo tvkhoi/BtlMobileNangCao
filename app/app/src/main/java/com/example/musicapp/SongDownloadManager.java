@@ -108,6 +108,7 @@ public class SongDownloadManager {
                 if (jsonSong.getString("songFileUrl").equals(newSongFileUrl)) {
                     isDuplicate = true;
                     // Optionally update existing entry
+                    jsonSong.put("songId", song.getSongId());
                     jsonSong.put("name", song.getName());
                     jsonSong.put("artist", song.getArtist());
                     jsonSong.put("imageUrl", song.getImageUrl());
@@ -133,6 +134,7 @@ public class SongDownloadManager {
             // If not duplicate, add new song
             if (!isDuplicate) {
                 JSONObject jsonSong = new JSONObject();
+                jsonSong.put("songId", song.getSongId());
                 jsonSong.put("name", song.getName());
                 jsonSong.put("artist", song.getArtist());
                 jsonSong.put("songFileUrl", newSongFileUrl);
@@ -185,6 +187,7 @@ public class SongDownloadManager {
             for (int i = 0; i < jsonArray.length(); i++) {
                 JSONObject jsonSong = jsonArray.getJSONObject(i);
                 Song song = new Song();
+                song.setSongId(jsonSong.getString("songId"));
                 song.setName(jsonSong.getString("name"));
                 song.setArtist(jsonSong.getString("artist"));
                 song.setSongFileUrl(jsonSong.getString("songFileUrl"));

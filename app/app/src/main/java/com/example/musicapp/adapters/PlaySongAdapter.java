@@ -52,7 +52,7 @@ public class PlaySongAdapter extends RecyclerView.Adapter<PlaySongAdapter.ViewHo
         Glide.with(context).load(song.getImageUrl())
                 .placeholder(R.drawable.song)
                 .into(holder.imgSong);
-        holder.nameArtist.setText(song.getArtistId());
+        holder.nameArtist.setText(song.getArtist());
         holder.itemView.setOnClickListener(v -> listener.onSongClick(position));
     }
 
