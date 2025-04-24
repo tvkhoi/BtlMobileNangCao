@@ -155,6 +155,16 @@ public class MediaPlayerService extends Service implements MediaPlayer.OnComplet
         }
     }
 
+    public int getDuration() {
+        if (mediaPlayer != null && isPrepared) {
+            int duration = mediaPlayer.getDuration();
+            Log.d(TAG, "getDuration: duration=" + duration);
+            return duration;
+        }
+        Log.w(TAG, "getDuration: MediaPlayer not prepared or null");
+        return 0;
+    }
+
     @Override
     public void onPrepared(MediaPlayer mp) {
         isPrepared = true;

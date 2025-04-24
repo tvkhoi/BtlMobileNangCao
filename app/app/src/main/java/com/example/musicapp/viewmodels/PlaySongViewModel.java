@@ -61,6 +61,15 @@ public class PlaySongViewModel extends ViewModel {
         });
     }
 
+    public void setSongDuration(int duration) {
+        if (duration > 0) {
+            songDuration.setValue(duration);
+            Log.d(TAG, "setSongDuration: duration=" + duration);
+        } else {
+            Log.w(TAG, "setSongDuration: Invalid duration=" + duration);
+        }
+    }
+
     public void setSongList(ArrayList<Song> songs, int position) {
         if (songs != null && !songs.isEmpty() && position >= 0 && position < songs.size()) {
             songList.setValue(new ArrayList<>(songs)); // Create a new copy to avoid external modifications
@@ -104,12 +113,26 @@ public class PlaySongViewModel extends ViewModel {
             Log.e(TAG, "MediaPlayerService not initialized for togglePlayPause");
             return;
         }
-        if (isPlaying.getValue() != null && isPlaying.getValue()) {
+        if (mediaPlayerService.isPlaying()) {
             mediaPlayerService.pauseSong();
+            isPlaying.setValue(false);
             Log.d(TAG, "Pausing song");
         } else {
-            mediaPlayerService.resumeSong();
-            Log.d(TAG, "Resuming song");
+            if (mediaPlayerService.isPrepared() && mediaPlayerService.getCurrentSong() != null) {
+                mediaPlayerService.resumeSong();
+                isPlaying.setValue(true);
+                Log.d(TAG, "Resuming song");
+            } else {
+                Song current = currentSong.getValue();
+                if (current != null) {
+                    mediaPlayerService.playSong(current);
+                    isPlaying.setValue(true);
+                    Log.d(TAG, "Playing song from togglePlayPause: " + current.getName());
+                } else {
+                    error.setValue("No song selected to play");
+                    Log.e(TAG, "No song selected to play");
+                }
+            }
         }
     }
 

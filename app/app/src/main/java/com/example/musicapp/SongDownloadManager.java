@@ -111,7 +111,6 @@ public class SongDownloadManager {
                     jsonSong.put("name", song.getName());
                     jsonSong.put("artist", song.getArtist());
                     jsonSong.put("imageUrl", song.getImageUrl());
-                    //jsonSong.put("liked", song.getLiked());
                     long duration = 0;
                     MediaMetadataRetriever retriever = new MediaMetadataRetriever();
                     try {

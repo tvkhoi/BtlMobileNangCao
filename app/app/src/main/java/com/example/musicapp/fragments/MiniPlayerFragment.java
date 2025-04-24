@@ -53,32 +53,34 @@ public class MiniPlayerFragment extends Fragment {
             @Override
             public void onReceive(Context context, Intent intent) {
                 Song song = (Song) intent.getSerializableExtra("song");
+                ArrayList<Song> songList = (ArrayList<Song>) intent.getSerializableExtra("songList");
+                int songIndex = intent.getIntExtra("songIndex", -1);
                 int currentPosition = intent.getIntExtra("currentPosition", 0);
                 boolean isPlaying = intent.getBooleanExtra("isPlaying", false);
-                Log.d(TAG, "Received broadcast: song=" + (song != null ? song.getName() : "null") + ", position=" + currentPosition + ", isPlaying=" + isPlaying);
+                Log.d(TAG, "Received broadcast: song=" + (song != null ? song.getName() : "null") +
+                        ", songListSize=" + (songList != null ? songList.size() : "null") +
+                        ", songIndex=" + songIndex + ", position=" + currentPosition + ", isPlaying=" + isPlaying);
 
-                if (song != null) {
-                    // Lấy songList từ viewModel
-                    ArrayList<Song> songList = viewModel.getSongList().getValue();
-                    if (songList == null) {
-                        songList = new ArrayList<>();
-                    }
-                    // Kiểm tra xem bài hát có trong songList không
-                    int songIndex = songList.indexOf(song);
-                    if (songIndex < 0) {
-                        // Nếu bài hát không có trong danh sách, thêm nó
-                        songList.add(song);
-                        songIndex = songList.size() - 1;
-                    }
-                    // Cập nhật viewModel
+                if (song != null && songList != null && !songList.isEmpty() && songIndex >= 0 && songIndex < songList.size()) {
                     viewModel.setSongList(songList, songIndex);
                     viewModel.setIsPlaying(isPlaying);
                     if (currentPosition > 0) {
                         seekBar.setProgress(currentPosition);
                     }
                     updateUI(song, isPlaying, currentPosition);
+                } else if (song != null) {
+                    // Fallback: Chỉ có bài hát, tạo songList mới
+                    ArrayList<Song> fallbackList = new ArrayList<>();
+                    fallbackList.add(song);
+                    viewModel.setSongList(fallbackList, 0);
+                    viewModel.setIsPlaying(isPlaying);
+                    if (currentPosition > 0) {
+                        seekBar.setProgress(currentPosition);
+                    }
+                    updateUI(song, isPlaying, currentPosition);
+                    Log.w(TAG, "Fallback: Created new songList with single song: " + song.getName());
                 } else {
-                    Log.e(TAG, "Received null song in broadcast");
+                    Log.e(TAG, "Received invalid broadcast data");
                     miniPlayerContainer.setVisibility(View.GONE);
                 }
             }

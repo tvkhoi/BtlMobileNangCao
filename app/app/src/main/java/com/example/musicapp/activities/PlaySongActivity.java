@@ -186,13 +186,23 @@ public class PlaySongActivity extends AppCompatActivity {
 
     private void setupListeners() {
         imgMinimize.setOnClickListener(v -> {
+            Song currentSong = viewModel.getCurrentSong().getValue();
+            ArrayList<Song> currentSongList = viewModel.getSongList().getValue();
+            Integer currentSongIndex = viewModel.getSongIndex().getValue();
+            int currentPosition = player != null ? player.getCurrentPosition() : seekBar.getProgress();
+            boolean isPlaying = viewModel.getIsPlaying().getValue() != null && viewModel.getIsPlaying().getValue();
+
             Intent intent = new Intent(MINI_PLAYER);
-            intent.putExtra("song", viewModel.getCurrentSong().getValue());
-            intent.putExtra("currentPosition", player != null ? player.getCurrentPosition() : seekBar.getProgress());
-            intent.putExtra("isPlaying", Boolean.TRUE.equals(viewModel.getIsPlaying().getValue()));
+            intent.putExtra("song", currentSong);
+            intent.putExtra("songList", currentSongList);
+            intent.putExtra("songIndex", currentSongIndex != null ? currentSongIndex : -1);
+            intent.putExtra("currentPosition", currentPosition);
+            intent.putExtra("isPlaying", isPlaying);
             LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+            Log.d(TAG, "Minimize clicked, broadcast sent: song=" + (currentSong != null ? currentSong.getName() : "null") +
+                    ", songListSize=" + (currentSongList != null ? currentSongList.size() : "null") +
+                    ", songIndex=" + currentSongIndex + ", position=" + currentPosition + ", isPlaying=" + isPlaying);
             finish();
-            Log.d(TAG, "Minimize clicked, broadcast sent");
         });
         imgPlayPause.setOnClickListener(v -> viewModel.togglePlayPause());
         imgNext.setOnClickListener(v -> viewModel.playNextSong());
@@ -311,12 +321,70 @@ public class PlaySongActivity extends AppCompatActivity {
             setupViewModel();
             setupListeners();
             viewModel.setMediaPlayerService(player);
-            boolean isPlaying = getIntent().getBooleanExtra("isPlaying", false);
-            if (isPlaying) {
-                viewModel.playSong(songList.get(songIndex));
-                int currentPosition = getIntent().getIntExtra("currentPosition", 0);
-                if (currentPosition > 0) {
-                    player.seekTo(currentPosition);
+//
+            // Khôi phục trạng thái phát nhạc
+            Song currentSong = viewModel.getCurrentSong().getValue();
+            boolean isPlaying = viewModel.getIsPlaying().getValue() != null && viewModel.getIsPlaying().getValue();
+            int currentPosition = getIntent().getIntExtra("currentPosition", 0);
+
+            if (currentSong != null) {
+                if (player.getCurrentSong() != null && player.getCurrentSong().getSongId().equals(currentSong.getSongId()) && player.isPrepared()) {
+                    // Đồng bộ trạng thái từ MediaPlayerService
+                    viewModel.setIsPlaying(player.isPlaying());
+                    // Cập nhật seekBar và thời gian
+                    int duration = player.getDuration();
+                    if (duration > 0) {
+                        seekBar.setMax(duration);
+                        tvTotalTime.setText(formatTime(duration));
+                        viewModel.setSongDuration(duration); // Đồng bộ với viewModel
+                    }
+                    if (currentPosition > 0) {
+                        player.seekTo(currentPosition);
+                        seekBar.setProgress(currentPosition);
+                        tvCurrentTime.setText(formatTime(currentPosition));
+                    } else if (player.isPlaying()) {
+                        seekBar.setProgress(player.getCurrentPosition());
+                        tvCurrentTime.setText(formatTime(player.getCurrentPosition()));
+                    }
+                    Log.d(TAG, "Restored from MediaPlayerService: song=" + currentSong.getName() +
+                            ", isPlaying=" + player.isPlaying() + ", position=" + player.getCurrentPosition() +
+                            ", duration=" + duration);
+                } else {
+                    // Phát bài hát từ viewModel nếu MediaPlayerService không có bài hát phù hợp
+                    viewModel.playSong(currentSong);
+                    int duration = currentSong.getTotalDuration() > 0 ? currentSong.getTotalDuration() : player.getDuration();
+                    if (duration > 0) {
+                        seekBar.setMax(duration);
+                        tvTotalTime.setText(formatTime(duration));
+                        viewModel.setSongDuration(duration); // Đồng bộ với viewModel
+                    }
+                    if (currentPosition > 0) {
+                        player.seekTo(currentPosition);
+                        seekBar.setProgress(currentPosition);
+                        tvCurrentTime.setText(formatTime(currentPosition));
+                    }
+                    Log.d(TAG, "Playing from viewModel: song=" + currentSong.getName() +
+                            ", position=" + currentPosition + ", duration=" + duration);
+                }
+            } else {
+                // Dữ liệu từ Intent
+                boolean intentIsPlaying = getIntent().getBooleanExtra("isPlaying", false);
+                if (intentIsPlaying && songList != null && songIndex >= 0) {
+                    Song song = songList.get(songIndex);
+                    viewModel.playSong(song);
+                    int duration = song.getTotalDuration() > 0 ? song.getTotalDuration() : player.getDuration();
+                    if (duration > 0) {
+                        seekBar.setMax(duration);
+                        tvTotalTime.setText(formatTime(duration));
+                        viewModel.setSongDuration(duration); // Đồng bộ với viewModel
+                    }
+                    if (currentPosition > 0) {
+                        player.seekTo(currentPosition);
+                        seekBar.setProgress(currentPosition);
+                        tvCurrentTime.setText(formatTime(currentPosition));
+                    }
+                    Log.d(TAG, "Playing from Intent: song=" + song.getName() +
+                            ", position=" + currentPosition + ", duration=" + duration);
                 }
             }
             imgRepeat.setImageResource(viewModel.isRepeatEnabled() ? R.drawable.icon_repeat_50_on : R.drawable.repeat_icon);
