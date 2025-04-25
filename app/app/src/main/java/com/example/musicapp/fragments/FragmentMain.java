@@ -4,8 +4,10 @@ package com.example.musicapp.fragments;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -54,8 +56,7 @@ public class FragmentMain extends Fragment{
         circleImageView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Intent intent =new Intent(getActivity(), RegisterActivity.class);
-                startActivity(intent);
+                showUserMenu(view);
             }
         });
 
@@ -90,6 +91,35 @@ public class FragmentMain extends Fragment{
         });
         TabLayout.Tab firstTab = tabLayoutScrollBar.getTabAt(0);
         firstTab.view.setBackgroundResource(R.drawable.rounded_background_solid);
+    }
+
+    private void showUserMenu(View view) {
+        PopupMenu popupMenu = new PopupMenu(getActivity(), view);
+        popupMenu.getMenuInflater().inflate(R.menu.user_menu, popupMenu.getMenu());
+        popupMenu.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+            @Override
+            public boolean onMenuItemClick(MenuItem item) {
+                if (item.getItemId() == R.id.menu_logout) {
+                    // Xử lý đăng xuất
+                    logoutUser();
+                    return true;
+                }
+                return false;
+            }
+        });
+        popupMenu.show();
+    }
+
+    private void logoutUser() {
+        mAuth = FirebaseAuth.getInstance();
+        mAuth.signOut();
+        Toast.makeText(getActivity(), "Đã đăng xuất", Toast.LENGTH_SHORT).show();
+
+        // Chuyển về màn hình đăng nhập (RegisterActivity)
+        Intent intent = new Intent(getActivity(), RegisterActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK); // Xóa toàn bộ Activity stack
+        startActivity(intent);
+        getActivity().finish(); // Đóng MainActivity
     }
 
     private void setHelloUserName(){
