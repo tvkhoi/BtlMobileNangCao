@@ -5,7 +5,13 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Binder;
 import android.os.Build;
@@ -13,14 +19,20 @@ import android.os.IBinder;
 import android.text.TextUtils;
 import android.util.Log;
 import androidx.core.app.NotificationCompat;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import com.example.musicapp.R;
 import com.example.musicapp.activities.MainActivity;
 import com.example.musicapp.models.Song;
 
-public class MediaPlayerService extends Service implements MediaPlayer.OnCompletionListener, MediaPlayer.OnErrorListener, MediaPlayer.OnPreparedListener {
+public class MediaPlayerService extends Service implements MediaPlayer.OnCompletionListener, MediaPlayer.OnErrorListener, MediaPlayer.OnPreparedListener, AudioManager.OnAudioFocusChangeListener {
     private static final String TAG = "MediaPlayerService";
     private static final String CHANNEL_ID = "music_channel";
     private static final int NOTIFICATION_ID = 1;
+
+    private static final String ACTION_PLAY_PAUSE = "com.example.musicapp.ACTION_PLAY_PAUSE";
+    private static final String ACTION_NEXT = "com.example.musicapp.ACTION_NEXT";
+    private static final String ACTION_PREVIOUS = "com.example.musicapp.ACTION_PREVIOUS";
+    private static final String ACTION_DISMISS = "com.example.musicapp.ACTION_DISMISS";
 
     private final IBinder binder = new LocalBinder();
     private MediaPlayer mediaPlayer;
@@ -28,12 +40,16 @@ public class MediaPlayerService extends Service implements MediaPlayer.OnComplet
     private boolean isPlaying = false;
     private PlaybackListener playbackListener;
     private boolean isPrepared = false;
+    private BroadcastReceiver notificationReceiver;
+    private AudioManager audioManager;
+    private AudioFocusRequest audioFocusRequest;
 
     public interface PlaybackListener {
         void onPlaybackStateChanged(boolean isPlaying, int position);
         void onError(String errorMessage);
         void onSongPrepared(int duration);
         void onSongCompleted();
+        void onPreviousSong();
     }
 
     public class LocalBinder extends Binder {
@@ -47,6 +63,60 @@ public class MediaPlayerService extends Service implements MediaPlayer.OnComplet
         super.onCreate();
         initializeMediaPlayer();
         createNotificationChannel();
+
+        // Khởi tạo AudioManager
+        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+
+        notificationReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                String action = intent.getAction();
+                Log.d(TAG, "Broadcast received: " + action);
+                if (action != null) {
+                    switch (action) {
+                        case ACTION_PLAY_PAUSE:
+                            Log.d(TAG, "Action Play/Pause received, isPlaying=" + isPlaying);
+                            if (isPlaying()) {
+                                pauseSong();
+                            } else {
+                                resumeSong();
+                            }
+                            break;
+                        case ACTION_NEXT:
+                            Log.d(TAG, "Action Next received");
+                            if (playbackListener != null) {
+                                playbackListener.onSongCompleted();
+                            }
+                            break;
+                        case ACTION_PREVIOUS:
+                            Log.d(TAG, "Action Previous received");
+                            if (playbackListener != null) {
+                                playbackListener.onPreviousSong();
+                            }
+                            break;
+                        case ACTION_DISMISS:
+                            Log.d(TAG, "Notification dismissed, stopping service");
+                            stopSong();
+                            stopSelf();
+                            break;
+                    }
+                } else {
+                    Log.w(TAG, "Received broadcast with null action");
+                }
+            }
+        };
+
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(ACTION_PLAY_PAUSE);
+        filter.addAction(ACTION_NEXT);
+        filter.addAction(ACTION_PREVIOUS);
+        filter.addAction(ACTION_DISMISS);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            registerReceiver(notificationReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(notificationReceiver, filter);
+        }
     }
 
     private void initializeMediaPlayer() {
@@ -77,6 +147,12 @@ public class MediaPlayerService extends Service implements MediaPlayer.OnComplet
             return;
         }
         try {
+            // Yêu cầu focus âm thanh trước khi phát
+            if (!requestAudioFocus()) {
+                notifyError("Cannot play song: Audio focus not granted");
+                return;
+            }
+
             if (currentSong != null && currentSong.getSongId().equals(song.getSongId()) && isPrepared && !isPlaying) {
                 mediaPlayer.start();
                 isPlaying = true;
@@ -89,7 +165,8 @@ public class MediaPlayerService extends Service implements MediaPlayer.OnComplet
             currentSong = song;
             mediaPlayer.setDataSource(song.getSongFileUrl());
             mediaPlayer.prepareAsync();
-            startForeground(NOTIFICATION_ID, createNotification(song));
+            startForeground(NOTIFICATION_ID, createNotification(song, false));
+            notifyPlaybackState(false, 0);
             Log.d(TAG, "Preparing song: " + song.getName() + ", URL: " + song.getSongFileUrl());
         } catch (Exception e) {
             Log.e(TAG, "Error preparing song: " + e.getMessage());
@@ -109,11 +186,15 @@ public class MediaPlayerService extends Service implements MediaPlayer.OnComplet
 
     public void resumeSong() {
         if (!isPlaying && isPrepared && currentSong != null) {
-            mediaPlayer.start();
-            isPlaying = true;
-            updateNotification(currentSong, true);
-            notifyPlaybackState(true, mediaPlayer.getCurrentPosition());
-            Log.d(TAG, "Song resumed");
+            if (requestAudioFocus()) {
+                mediaPlayer.start();
+                isPlaying = true;
+                updateNotification(currentSong, true);
+                notifyPlaybackState(true, mediaPlayer.getCurrentPosition());
+                Log.d(TAG, "Song resumed");
+            } else {
+                notifyError("Cannot resume song: Audio focus not granted");
+            }
         }
     }
 
@@ -124,19 +205,16 @@ public class MediaPlayerService extends Service implements MediaPlayer.OnComplet
             isPrepared = false;
             stopForeground(true);
             notifyPlaybackState(false, 0);
+            abandonAudioFocus();
             Log.d(TAG, "Song stopped");
         }
     }
 
-    public boolean isPrepared() {return isPrepared;}
+    public boolean isPrepared() { return isPrepared; }
 
-    public boolean isPlaying() {
-        return isPlaying;
-    }
+    public boolean isPlaying() { return isPlaying; }
 
-    public Song getCurrentSong() {
-        return currentSong;
-    }
+    public Song getCurrentSong() { return currentSong; }
 
     public int getCurrentPosition() {
         return mediaPlayer != null && isPrepared ? mediaPlayer.getCurrentPosition() : 0;
@@ -174,6 +252,7 @@ public class MediaPlayerService extends Service implements MediaPlayer.OnComplet
         if (playbackListener != null) {
             playbackListener.onSongPrepared(mediaPlayer.getDuration());
         }
+        updateNotification(currentSong, true);
         Log.d(TAG, "Song prepared and started: " + (currentSong != null ? currentSong.getName() : "unknown"));
     }
 
@@ -182,11 +261,11 @@ public class MediaPlayerService extends Service implements MediaPlayer.OnComplet
         isPlaying = false;
         isPrepared = false;
         stopForeground(true);
+        abandonAudioFocus();
         if (playbackListener != null) {
             playbackListener.onSongCompleted();
         }
         Log.d(TAG, "Song completed: " + (currentSong != null ? currentSong.getName() : "unknown"));
-        // Kiểm tra xem có nên dừng service không
         if (playbackListener == null) {
             stopSelf();
             Log.d(TAG, "No playback listener, stopping service");
@@ -200,6 +279,8 @@ public class MediaPlayerService extends Service implements MediaPlayer.OnComplet
         isPrepared = false;
         notifyError("MediaPlayer error: what=" + what + ", extra=" + extra);
         initializeMediaPlayer();
+        updateNotification(currentSong, false);
+        abandonAudioFocus();
         return true;
     }
 
@@ -210,19 +291,23 @@ public class MediaPlayerService extends Service implements MediaPlayer.OnComplet
             mediaPlayer.release();
             mediaPlayer = null;
         }
+        unregisterReceiver(notificationReceiver);
+        abandonAudioFocus();
         Log.d(TAG, "Service destroyed");
         stopForeground(true);
     }
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Music Playback", NotificationManager.IMPORTANCE_LOW);
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Music Playback", NotificationManager.IMPORTANCE_DEFAULT);
+            channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+            channel.setShowBadge(false);
             NotificationManager manager = getSystemService(NotificationManager.class);
             manager.createNotificationChannel(channel);
         }
     }
 
-    private Notification createNotification(Song song) {
+    private Notification createNotification(Song song, boolean isPlaying) {
         if (song == null) {
             return new NotificationCompat.Builder(this, CHANNEL_ID)
                     .setContentTitle("Unknown Song")
@@ -231,8 +316,26 @@ public class MediaPlayerService extends Service implements MediaPlayer.OnComplet
                     .setOngoing(true)
                     .build();
         }
+
         Intent notificationIntent = new Intent(this, MainActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE);
+
+        Intent playPauseIntent = new Intent(ACTION_PLAY_PAUSE);
+        playPauseIntent.setPackage(getPackageName());
+        PendingIntent playPausePendingIntent = PendingIntent.getBroadcast(this, 0, playPauseIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        Intent nextIntent = new Intent(ACTION_NEXT);
+        nextIntent.setPackage(getPackageName());
+        PendingIntent nextPendingIntent = PendingIntent.getBroadcast(this, 0, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        Intent previousIntent = new Intent(ACTION_PREVIOUS);
+        previousIntent.setPackage(getPackageName());
+        PendingIntent previousPendingIntent = PendingIntent.getBroadcast(this, 0, previousIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        // Thêm PendingIntent cho hành động vuốt thông báo
+        Intent dismissIntent = new Intent(ACTION_DISMISS);
+        dismissIntent.setPackage(getPackageName());
+        PendingIntent dismissPendingIntent = PendingIntent.getBroadcast(this, 0, dismissIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         return new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle(song.getName())
@@ -240,11 +343,22 @@ public class MediaPlayerService extends Service implements MediaPlayer.OnComplet
                 .setSmallIcon(R.drawable.ic_apple_music_icon)
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setDeleteIntent(dismissPendingIntent) // Xử lý vuốt thông báo
+                .addAction(R.drawable.preiou_notication, "Previous", previousPendingIntent)
+                .addAction(isPlaying ? R.drawable.pause_icon : R.drawable.play_arrow, "Play/Pause", playPausePendingIntent)
+                .addAction(R.drawable.next_end_notification, "Next", nextPendingIntent)
+                .setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
+                        .setShowActionsInCompactView(0, 1, 2))
                 .build();
     }
 
     private void updateNotification(Song song, boolean isPlaying) {
-        Notification notification = createNotification(song);
+        if (song == null) return;
+        this.isPlaying = isPlaying;
+        Notification notification = createNotification(song, isPlaying);
         NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         manager.notify(NOTIFICATION_ID, notification);
     }
@@ -258,6 +372,63 @@ public class MediaPlayerService extends Service implements MediaPlayer.OnComplet
     private void notifyError(String errorMessage) {
         if (playbackListener != null) {
             playbackListener.onError(errorMessage);
+        }
+    }
+
+    // Quản lý focus âm thanh
+    private boolean requestAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            AudioAttributes audioAttributes = new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build();
+            audioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(audioAttributes)
+                    .setOnAudioFocusChangeListener(this)
+                    .build();
+            int result = audioManager.requestAudioFocus(audioFocusRequest);
+            return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+        } else {
+            int result = audioManager.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+            return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+        }
+    }
+
+    private void abandonAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (audioFocusRequest != null) {
+                audioManager.abandonAudioFocusRequest(audioFocusRequest);
+            }
+        } else {
+            audioManager.abandonAudioFocus(this);
+        }
+    }
+
+    @Override
+    public void onAudioFocusChange(int focusChange) {
+        switch (focusChange) {
+            case AudioManager.AUDIOFOCUS_LOSS:
+                Log.d(TAG, "Audio focus lost, stopping playback");
+                stopSong();
+                break;
+            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+                Log.d(TAG, "Audio focus lost transiently, pausing playback");
+                pauseSong();
+                break;
+            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
+                Log.d(TAG, "Audio focus lost transiently, can duck");
+                // Giảm âm lượng nếu cần
+                if (mediaPlayer != null) {
+                    mediaPlayer.setVolume(0.2f, 0.2f);
+                }
+                break;
+            case AudioManager.AUDIOFOCUS_GAIN:
+                Log.d(TAG, "Audio focus gained");
+                if (mediaPlayer != null && !isPlaying && isPrepared) {
+                    mediaPlayer.setVolume(1.0f, 1.0f);
+                    resumeSong();
+                }
+                break;
         }
     }
 }

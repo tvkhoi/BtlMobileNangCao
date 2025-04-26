@@ -11,66 +11,83 @@
     android:paddingLeft="24dp"
     android:visibility="visible"
     tools:context=".activities.PlaySongActivity">
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical">
+
+        <!-- Phần header với nút back và menu -->
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
-            android:layout_height="50dp"
-            >
+            android:layout_height="50dp">
+
             <ImageView
                 android:id="@+id/imgToMinimizePlayer"
                 android:layout_width="35dp"
                 android:layout_height="match_parent"
                 android:src="@drawable/chevron_left"
                 android:rotation="270"
-                app:layout_constraintLeft_toLeftOf="parent"
-                />
+                app:layout_constraintLeft_toLeftOf="parent" />
+
             <ImageView
                 android:layout_width="35dp"
                 android:layout_height="match_parent"
                 android:src="@drawable/more_vert"
-                app:layout_constraintRight_toRightOf="parent"
-                />
+                app:layout_constraintRight_toRightOf="parent" />
         </androidx.constraintlayout.widget.ConstraintLayout>
 
+        <!-- CardView chứa ảnh bài hát -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="360dp"
-            app:cardCornerRadius="20dp"
-            >
+            app:cardCornerRadius="20dp">
+
             <ImageView
                 android:id="@+id/imgSong_ActiPlaySong"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:src="@drawable/song"
                 android:scaleType="centerCrop"
-                android:layout_gravity="center_horizontal"
-                />
+                android:layout_gravity="center_horizontal" />
         </androidx.cardview.widget.CardView>
+
+        <!-- Phần thông tin bài hát và các icon -->
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:layout_marginTop="20dp"
-            >
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp">
+
+            <!-- Tên bài hát - giới hạn chiều rộng để không đè lên icon -->
             <TextView
                 android:id="@+id/tvNameSong_ActiPlaySong"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:text="20 25 30"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:textAppearance="@style/good_evening"
                 app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintLeft_toLeftOf="parent"/>
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintRight_toLeftOf="@id/iconFavorite_ActiPlaySong"
+                android:layout_marginRight="8dp"/>
+
+            <!-- Tên nghệ sĩ - giới hạn chiều rộng tương tự -->
             <TextView
                 android:id="@+id/tvNameArtist_ActiPlaySong"
-                android:layout_width="200dp"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:text="Bảo Anh"
                 android:ellipsize="end"
+                android:maxLines="1"
                 android:textAppearance="@style/hi_username"
                 app:layout_constraintLeft_toLeftOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent"/>
+                app:layout_constraintRight_toLeftOf="@id/iconFavorite_ActiPlaySong"
+                android:layout_marginRight="8dp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/tvNameSong_ActiPlaySong"/>
+
+            <!-- Các icon bên phải -->
             <ImageView
                 android:id="@+id/iconFavorite_ActiPlaySong"
                 android:layout_width="24dp"
@@ -79,23 +96,26 @@
                 app:layout_constraintRight_toLeftOf="@id/iconDownload_ActiPlaySong"
                 app:layout_constraintTop_toTopOf="parent"
                 android:layout_marginRight="15dp"/>
+
             <ImageView
                 android:id="@+id/iconDownload_ActiPlaySong"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
                 android:src="@drawable/icon_download"
                 app:layout_constraintRight_toLeftOf="@id/iconShare_ActiPlaySong"
                 app:layout_constraintTop_toTopOf="parent"
                 android:layout_marginRight="15dp"/>
+
             <ImageView
                 android:id="@+id/iconShare_ActiPlaySong"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
                 android:src="@drawable/more_vert"
                 app:layout_constraintRight_toRightOf="parent"
                 app:layout_constraintTop_toTopOf="parent"/>
         </androidx.constraintlayout.widget.ConstraintLayout>
 
+        <!-- Thanh seek bar -->
         <SeekBar
             android:id="@+id/seekBarSong"
             android:layout_width="match_parent"
@@ -103,12 +123,14 @@
             android:layout_marginTop="20dp"
             android:thumbTint="@color/white"
             android:foregroundTint="@color/white"
-            android:progressBackgroundTint="@color/color_text_artist"
-            />
+            android:progressBackgroundTint="@color/color_text_artist"/>
+
+        <!-- Thời gian bài hát -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal">
+
             <TextView
                 android:id="@+id/duration_song"
                 android:layout_width="36dp"
@@ -116,8 +138,8 @@
                 android:text="00:00"
                 android:layout_marginTop="8dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                />
+                android:layout_weight="1"/>
+
             <TextView
                 android:id="@+id/totalDuration_song"
                 android:layout_width="36dp"
@@ -125,9 +147,10 @@
                 android:layout_marginTop="8dp"
                 android:textAppearance="@style/duration_song"
                 android:text="4:30"
-                android:gravity="end"
-                />
+                android:gravity="end"/>
         </LinearLayout>
+
+        <!-- Các nút điều khiển phát nhạc -->
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -142,7 +165,6 @@
                 app:layout_constraintEnd_toStartOf="@+id/playPreSong_icon"
                 app:layout_constraintHorizontal_bias="0.5"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintRight_toLeftOf="@id/playPreSong_icon"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent"/>
 
@@ -154,7 +176,6 @@
                 app:layout_constraintEnd_toStartOf="@+id/playSong_icon"
                 app:layout_constraintHorizontal_bias="0.5"
                 app:layout_constraintStart_toEndOf="@+id/RandomSong_icon"
-                app:layout_constraintRight_toLeftOf="@id/playSong_icon"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent"/>
 
@@ -166,7 +187,6 @@
                 app:layout_constraintEnd_toStartOf="@+id/playNextSong_icon"
                 app:layout_constraintHorizontal_bias="0.5"
                 app:layout_constraintStart_toEndOf="@+id/playPreSong_icon"
-                app:layout_constraintRight_toLeftOf="@id/playNextSong_icon"
                 app:layout_constraintTop_toTopOf="parent"/>
 
             <ImageView
@@ -178,7 +198,6 @@
                 app:layout_constraintEnd_toStartOf="@+id/repeatSong_icon"
                 app:layout_constraintHorizontal_bias="0.5"
                 app:layout_constraintStart_toEndOf="@+id/playSong_icon"
-                app:layout_constraintRight_toLeftOf="@id/repeatSong_icon"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent"/>
 
@@ -191,14 +210,15 @@
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintHorizontal_bias="0.5"
                 app:layout_constraintStart_toEndOf="@+id/playNextSong_icon"
-                app:layout_constraintRight_toLeftOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent"/>
         </androidx.constraintlayout.widget.ConstraintLayout>
 
+        <!-- Danh sách bài hát tiếp theo -->
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
+
             <TextView
                 android:id="@+id/tvContinue"
                 android:layout_width="wrap_content"
@@ -208,6 +228,7 @@
                 android:text="Tiếp theo"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintLeft_toLeftOf="parent"/>
+
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/recy_ActiPlaySong"
                 android:layout_width="match_parent"
@@ -217,5 +238,4 @@
                 app:layout_constraintLeft_toLeftOf="parent"/>
         </androidx.constraintlayout.widget.ConstraintLayout>
     </LinearLayout>
-
 </androidx.core.widget.NestedScrollView>

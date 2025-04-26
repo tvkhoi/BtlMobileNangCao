@@ -58,6 +58,10 @@ public class PlaySongViewModel extends ViewModel {
                 Log.d(TAG, "Song completed, triggering playNextSong");
                 playNextSong();
             }
+            @Override
+            public void onPreviousSong() {
+                playPreviousSong();
+            }
         });
     }
 
