@@ -186,6 +186,11 @@ public class MediaPlayerService extends Service implements MediaPlayer.OnComplet
             playbackListener.onSongCompleted();
         }
         Log.d(TAG, "Song completed: " + (currentSong != null ? currentSong.getName() : "unknown"));
+        // Kiểm tra xem có nên dừng service không
+        if (playbackListener == null) {
+            stopSelf();
+            Log.d(TAG, "No playback listener, stopping service");
+        }
     }
 
     @Override
@@ -206,6 +211,7 @@ public class MediaPlayerService extends Service implements MediaPlayer.OnComplet
             mediaPlayer = null;
         }
         Log.d(TAG, "Service destroyed");
+        stopForeground(true);
     }
 
     private void createNotificationChannel() {
