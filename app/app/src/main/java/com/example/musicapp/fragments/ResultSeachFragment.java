@@ -58,6 +58,7 @@ public class ResultSeachFragment extends Fragment {
                 intent.putExtra("songList", (Serializable) songs);
                 intent.putExtra("position", songs.indexOf(song));
                 intent.putExtra("currentPosition", 0);
+                int s =songs.indexOf(song);
                 intent.putExtra("isPlaying", false);
                 startActivity(intent);
             });

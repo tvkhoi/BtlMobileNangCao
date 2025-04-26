@@ -86,7 +86,7 @@ public class PlaySongActivity extends AppCompatActivity {
 
     private void loadSongData() {
         songList = (ArrayList<Song>) getIntent().getSerializableExtra("songList");
-        songIndex = getIntent().getIntExtra("position", -1);
+        songIndex = (int) getIntent().getIntExtra("position", -1);
         int currentPosition = getIntent().getIntExtra("currentPosition", 0);
 
         if (songList == null || songList.isEmpty() || songIndex < 0 || songIndex >= songList.size()) {

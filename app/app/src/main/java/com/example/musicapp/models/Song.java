@@ -13,6 +13,18 @@ public class Song implements Serializable {
 
     public Song() {}
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Song song = (Song) o;
+        return songId != null && songId.equals(song.songId);
+    }
+
+    @Override
+    public int hashCode() {
+        return songId != null ? songId.hashCode() : 0;
+    }
     public String getSongId() {
         return songId;
     }
