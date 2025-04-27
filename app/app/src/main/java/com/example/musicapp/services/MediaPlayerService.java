@@ -9,6 +9,8 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Bitmap;
+import android.graphics.drawable.Drawable;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
@@ -18,8 +20,16 @@ import android.os.Build;
 import android.os.IBinder;
 import android.text.TextUtils;
 import android.util.Log;
+import android.widget.RemoteViews;
+
+import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.FutureTarget;
+import com.bumptech.glide.request.target.SimpleTarget;
+import com.bumptech.glide.request.transition.Transition;
 import com.example.musicapp.R;
 import com.example.musicapp.activities.MainActivity;
 import com.example.musicapp.models.Song;
@@ -316,42 +326,84 @@ public class MediaPlayerService extends Service implements MediaPlayer.OnComplet
                     .build();
         }
 
+        // Create RemoteViews for custom notification layout
+        RemoteViews remoteViews = new RemoteViews(getPackageName(), R.layout.notification_custom);
+
+        // Set song title and artist
+        remoteViews.setTextViewText(R.id.notification_song_title, song.getName());
+        remoteViews.setTextViewText(R.id.notification_song_artist, song.getArtist());
+
+        // Load album art
+        Bitmap albumArt = null;
+        if (song.getImageUrl() != null && !song.getImageUrl().isEmpty()) {
+            Log.d(TAG, "Loading song image from URL: " + song.getImageUrl());
+            try {
+                FutureTarget<Bitmap> futureTarget = Glide.with(this)
+                        .asBitmap()
+                        .load(song.getImageUrl())
+                        .placeholder(R.drawable.song)
+                        .error(R.drawable.song)
+                        .submit();
+                albumArt = futureTarget.get();
+                if (albumArt != null) {
+                    remoteViews.setImageViewBitmap(R.id.notification_album_art, albumArt);
+                    Log.d(TAG, "Song image loaded successfully");
+                } else {
+                    Log.w(TAG, "Song image bitmap is null");
+                    remoteViews.setImageViewResource(R.id.notification_album_art, R.drawable.song);
+                }
+                Glide.with(this).clear(futureTarget);
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to load song image for notification: " + e.getMessage());
+                remoteViews.setImageViewResource(R.id.notification_album_art, R.drawable.song);
+            }
+        } else {
+            Log.w(TAG, "Song image URL is null or empty for song: " + song.getName());
+            remoteViews.setImageViewResource(R.id.notification_album_art, R.drawable.song);
+        }
+
+        // Set play/pause button icon
+        remoteViews.setImageViewResource(R.id.notification_play_pause, isPlaying ? R.drawable.pause_icon : R.drawable.play_arrow);
+
+        // Set up PendingIntents for actions with unique request codes
         Intent notificationIntent = new Intent(this, MainActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE);
 
         Intent playPauseIntent = new Intent(ACTION_PLAY_PAUSE);
         playPauseIntent.setPackage(getPackageName());
-        PendingIntent playPausePendingIntent = PendingIntent.getBroadcast(this, 0, playPauseIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent playPausePendingIntent = PendingIntent.getBroadcast(this, 1, playPauseIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Intent nextIntent = new Intent(ACTION_NEXT);
         nextIntent.setPackage(getPackageName());
-        PendingIntent nextPendingIntent = PendingIntent.getBroadcast(this, 0, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent nextPendingIntent = PendingIntent.getBroadcast(this, 2, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Intent previousIntent = new Intent(ACTION_PREVIOUS);
         previousIntent.setPackage(getPackageName());
-        PendingIntent previousPendingIntent = PendingIntent.getBroadcast(this, 0, previousIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent previousPendingIntent = PendingIntent.getBroadcast(this, 3, previousIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        // Thêm PendingIntent cho hành động vuốt thông báo
         Intent dismissIntent = new Intent(ACTION_DISMISS);
         dismissIntent.setPackage(getPackageName());
-        PendingIntent dismissPendingIntent = PendingIntent.getBroadcast(this, 0, dismissIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent dismissPendingIntent = PendingIntent.getBroadcast(this, 4, dismissIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        return new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle(song.getName())
-                .setContentText(song.getArtist())
+        // Set click listeners for buttons
+        remoteViews.setOnClickPendingIntent(R.id.notification_prev, previousPendingIntent);
+        remoteViews.setOnClickPendingIntent(R.id.notification_play_pause, playPausePendingIntent);
+        remoteViews.setOnClickPendingIntent(R.id.notification_next, nextPendingIntent);
+
+        // Build the notification
+        Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_apple_music_icon)
                 .setContentIntent(pendingIntent)
+                .setDeleteIntent(dismissPendingIntent)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                .setDeleteIntent(dismissPendingIntent) // Xử lý vuốt thông báo
-                .addAction(R.drawable.preiou_notication, "Previous", previousPendingIntent)
-                .addAction(isPlaying ? R.drawable.pause_icon : R.drawable.play_arrow, "Play/Pause", playPausePendingIntent)
-                .addAction(R.drawable.next_end_notification, "Next", nextPendingIntent)
-                .setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
-                        .setShowActionsInCompactView(0, 1, 2))
+                .setCustomContentView(remoteViews)
+                .setCustomBigContentView(remoteViews)
                 .build();
+
+        return notification;
     }
 
     private void updateNotification(Song song, boolean isPlaying) {
