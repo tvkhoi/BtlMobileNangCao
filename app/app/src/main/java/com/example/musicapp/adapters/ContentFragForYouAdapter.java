@@ -56,6 +56,9 @@ public class ContentFragForYouAdapter extends RecyclerView.Adapter<ContentFragFo
         Frame frame = frameList.get(position);
         holder.tvFrameName.setText(frame.getName() != null ? frame.getName() : "Unknown");
 
+        // Tắt nested scrolling cho RecyclerView con để tránh xung đột
+        holder.recyclerView.setNestedScrollingEnabled(false);
+
         if (frame.getType() == 2) {
             ArtistAdapter artistAdapter = new ArtistAdapter(frame.getDisplayArtists(), position);
             holder.recyclerView.setLayoutManager(new LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false));

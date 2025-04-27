@@ -3,6 +3,7 @@ package com.example.musicapp.fragments;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
@@ -68,6 +69,29 @@ public class FragmentForYou extends Fragment {
 
         recyclerView.setLayoutManager(new LinearLayoutManager(getActivity(), LinearLayoutManager.VERTICAL, false));
         recyclerView.setAdapter(adapter);
+
+        // Xử lý xung đột vuốt ngang
+        recyclerView.addOnItemTouchListener(new RecyclerView.OnItemTouchListener() {
+            @Override
+            public boolean onInterceptTouchEvent(@NonNull RecyclerView rv, @NonNull MotionEvent e) {
+                // Khi người dùng chạm vào RecyclerView, yêu cầu NestedScrollView không can thiệp
+                View nestedScrollView = getView().findViewById(R.id.fragment_foryou);
+                if (nestedScrollView != null) {
+                    nestedScrollView.getParent().requestDisallowInterceptTouchEvent(true);
+                }
+                return false;
+            }
+
+            @Override
+            public void onTouchEvent(@NonNull RecyclerView rv, @NonNull MotionEvent e) {
+                // Không cần xử lý thêm
+            }
+
+            @Override
+            public void onRequestDisallowInterceptTouchEvent(boolean disallowIntercept) {
+                // Không cần xử lý
+            }
+        });
 
         viewModel.getEnrichedFrames().observe(getViewLifecycleOwner(), frames -> {
             if (frames != null) {

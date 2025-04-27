@@ -260,7 +260,6 @@ public class MediaPlayerService extends Service implements MediaPlayer.OnComplet
     public void onCompletion(MediaPlayer mp) {
         isPlaying = false;
         isPrepared = false;
-        stopForeground(true);
         abandonAudioFocus();
         if (playbackListener != null) {
             playbackListener.onSongCompleted();

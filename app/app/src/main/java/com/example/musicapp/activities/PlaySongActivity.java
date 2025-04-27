@@ -1,5 +1,6 @@
 package com.example.musicapp.activities;
 
+import android.app.ActivityManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -307,9 +308,27 @@ public class PlaySongActivity extends AppCompatActivity {
     }
 
     private void startAndBindService() {
-        Intent intent = new Intent(this, MediaPlayerService.class);
-        startService(intent);
-        bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+        if (isAppInForeground()) {
+            Intent intent = new Intent(this, MediaPlayerService.class);
+            startService(intent);
+            bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+        } else {
+            Log.w(TAG, "Cannot start service: App is not in foreground");
+            Toast.makeText(this, "Please open the app to play music", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private boolean isAppInForeground() {
+        ActivityManager activityManager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+        List<ActivityManager.RunningAppProcessInfo> processes = activityManager.getRunningAppProcesses();
+        if (processes != null) {
+            for (ActivityManager.RunningAppProcessInfo process : processes) {
+                if (process.processName.equals(getPackageName()) && process.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private final ServiceConnection serviceConnection = new ServiceConnection() {
